@@ -12,6 +12,11 @@
 (defn orc-config [& ops]
   (org.apache.hadoop.conf.Configuration.))
 
+(defn orc-config [& ops]
+  (let [conf (org.apache.hadoop.conf.Configuration.)]
+    (.set conf "fs.file.impl" "org.apache.hadoop.fs.LocalFileSystem")
+    conf))
+
 (defn get-col [bat n]
   (nth (.cols bat) n))
 

@@ -29,7 +29,7 @@ lein uberjar
     {:name "f1" :type "int"   }
     {:name "f2" :type "strng" }))
 
-defn column-handlers [val]
+(defn column-handlers [val]
   (val 
     :foo (deser/col-handlers foo)
     :bar (deser/col-handlers bar)

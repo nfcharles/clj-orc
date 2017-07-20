@@ -4,6 +4,8 @@
 
 
 (defn rm-files [root]
+  ;; Sort order guarantees that all child elements are deleted
+  ;; before parents.
   (doseq [f (sort-by #(* -1 (count (.getPath %))) (file-seq root))]
     (io/delete-file f)))
 
