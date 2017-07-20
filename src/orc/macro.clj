@@ -10,7 +10,7 @@
     (io/delete-file f)))
 
 (defn mkdirp [path]
-  (let [dir (java.io.File. path)]
+  (let [dir (io/file path)]
     (if (.exists dir)
       true
       (.mkdirs dir))))
@@ -24,7 +24,7 @@
     ws))
 
 (defmacro with-tmp-workspace [bindings & body]
-  (assert vector? bindings) "vector required for binding"
+  (assert (vector? bindings) "vector required for binding")
   (assert (== (count bindings) 2) "only one binding pair allowed")
   (assert (symbol? (bindings 0)) "only symbol allowed in binding")
   `(let [~(bindings 0) (mk-workspace ~(bindings 1))]
@@ -46,6 +46,11 @@
       * rdr: file reader
       * bat: batch abstraction
       * wrt: write func that accepts accumulated batch rows"
+  (assert (vector? bindings) "vector required for binding")
+  (assert (== (count bindings) 6) "three binding pairs expected")
+  (assert (symbol? (bindings 0)) "only symbol allowed in first binding")
+  (assert (symbol? (bindings 2)) "only symbol allowed in second binding")
+  (assert (symbol? (bindings 4)) "only symbol allowed in third binding")
   `(let ~(subvec bindings 0 6)
      (let [rr# (.rows ~(bindings 0))]
        (try

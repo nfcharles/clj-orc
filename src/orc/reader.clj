@@ -58,7 +58,7 @@
 (defn process [src-path dest-wtr conf column-handlers]
     (with-batches [rdr (reader (fs-path src-path) conf)
                    bat (batch rdr)
-                   wrt (partial write dest-wtr)]
+                   wtr (partial write dest-wtr)]
       (rows->map (column-handlers bat) bat)))
 
 (defn orc->json [src-path dest-path column-handlers]

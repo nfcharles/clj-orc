@@ -66,6 +66,8 @@ lein uberjar
 ```
 
 ## TODO
+ * Memory optimizations
+ * Multi threaded processing
  * Unit testing
  * Complex type deserializers
 
