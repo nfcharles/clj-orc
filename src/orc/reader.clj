@@ -9,12 +9,16 @@
   (:gen-class))
 
 
-(defn orc-config [& ops]
-  (org.apache.hadoop.conf.Configuration.))
+(def config-mapping
+  (hash-map
+    "fs.file.impl" "org.apache.hadoop.fs.LocalFileSystem"))
 
 (defn orc-config [& ops]
   (let [conf (org.apache.hadoop.conf.Configuration.)]
-    (.set conf "fs.file.impl" "org.apache.hadoop.fs.LocalFileSystem")
+    (println "CONFIGURATION")
+    (doseq [[k v] config-mapping]
+      (println (format "%s=%s" k v))
+      (.set conf k v))
     conf))
 
 (defn get-col [bat n]
