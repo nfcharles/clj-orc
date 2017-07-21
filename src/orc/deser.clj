@@ -12,6 +12,18 @@
     (.stringifyValue col buf row-n)
     buf))
 
+(defn flt [col row-n]
+  (let [val (nth (.vector col) row-n)]
+    (if (Float/isNaN val)
+      Float/MIN_VALUE
+      val)))
+
+(defn dble [col row-n]
+  (let [val (nth (.vector col) row-n)]
+    (if (Double/isNaN val)
+      Double/MIN_VALUE
+      val)))
+
 (defn default [col row-n]
   "Returns deserialized row value"
   ;; TODO: check repeating flag for ColumnVector
@@ -20,10 +32,11 @@
 
 ;;; TODO: implement remaining types - complex types.
 
-
 (def type-mapper
   (hash-map
-    "string" string))    
+    "string" string
+    "float"  flt
+    "double" dble))
 
 (defn accum [acc name func]
   (conj acc {:name name :fn func}))

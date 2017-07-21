@@ -1,7 +1,8 @@
 (ns orc.reader
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-	    [orc.macro :refer [with-batches]])
+	    [clojure.core.async :as async]
+	    [orc.macro :refer [with-async-batches]])
   (:import (org.apache.orc.OrcFile)
            (org.apache.orc.OrcFile.ReaderOptions)
            (org.apache.hadoop.fs.Path)
@@ -55,17 +56,55 @@
 (defn batch [rdr]
   (.createRowBatch (.getSchema rdr)))
 
-(defn write [wtr rows]
-  (println (format "rows.count=%d" (count rows)))
-  (.write wtr (json/write-str rows)))
+;;;
+;;; --- NEW ---
+;;;
 
-(defn process [src-path dest-wtr conf column-handlers]
-    (with-batches [rdr (reader (fs-path src-path) conf)
-                   bat (batch rdr)
-                   wtr (partial write dest-wtr)]
-      (rows->map (column-handlers bat) bat)))
+(defn write [dest-path rows thrd-n]
+  (if (> (count rows) 0)
+    (with-open [wtr (io/writer dest-path)]
+      (println (format "Writing %s" dest-path))
+      (try
+        (.write wtr (json/write-str rows))
+	(catch Exception e
+	  (println e)))
+      (println (format "count.writer.thread_%s=%s" thrd-n (count rows))))
+    (println (format "Not writing %s; no records" dest-path))))
 
-(defn orc->json [src-path dest-path column-handlers]
-  (let [conf (orc-config)]
-    (with-open [dest-wtr (io/writer dest-path)]	
-      (process src-path dest-wtr conf column-handlers))))
+(defn- writer [in-ch prefix n]
+  (let [out-ch (async/chan)
+        active-threads (atom n)
+        filename #(format "%s-part-%d-%d.json" %1 %2 %3)] ; <pfx>-part-<thrd-no>-<grp-n>.json
+    (dotimes [thrd-n n]
+      (async/thread
+        (println (format "Staring writer thread-%d" thrd-n))
+        (loop [grp-n 0]
+          (if-let [rows (async/<!! in-ch)]
+            (do
+              (write (filename prefix thrd-n grp-n) rows thrd-n)
+	      (recur (inc grp-n)))
+	    (do
+              (swap! active-threads dec)
+              (when (= @active-threads 0)
+                (async/>!! out-ch :close)
+                (async/close! out-ch)))))))
+    out-ch))
+
+
+(defn process [in-ch conf src-path limit column-handlers]
+  (with-async-batches [rdr (reader (fs-path src-path) conf)
+                       bat (batch rdr)
+		       ch in-ch
+                       wrt-limit limit]
+    (rows->map (column-handlers bat) bat)))
+
+(defn run [conf src-path dest-path-prefix limit column-handlers]
+  (let [pipe (async/chan)]
+    (process pipe conf src-path limit column-handlers)
+    ;; Thread macro uses daemon threads so we must explicitly block
+    ;; until all writer threads are complete to prevent premature
+    ;; termination of main thread.
+    (async/<!! (writer pipe dest-path-prefix 2))))
+
+(defn orc->json [src-path dest-path-prefix limit column-handlers]
+  (run (orc-config) src-path dest-path-prefix limit column-handlers))
