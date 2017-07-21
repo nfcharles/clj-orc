@@ -2,13 +2,14 @@
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
 	    [clojure.core.async :as async]
-	    [orc.macro :refer [with-async-batches]])
+	    [orc.macro :refer [with-async-record-reader]])
   (:import (org.apache.orc.OrcFile)
            (org.apache.orc.OrcFile.ReaderOptions)
            (org.apache.hadoop.fs.Path)
 	   (org.apache.hadoop.conf.Configuration))
   (:gen-class))
 
+(def buffer-size 10)
 
 (def config-mapping
   (hash-map
@@ -35,7 +36,7 @@
          rcrd (transient {})]
     (if-let [conf (first col-conf)]
       (let [val (value (conf :fn) bat col-n row-n)]
-        (recur (inc col-n) (rest col-conf) (assoc! rcrd (conf :name) val)))
+        (recur (inc col-n) (rest col-conf) (assoc! rcrd col-n val)))
       (persistent! rcrd))))
 
 (defn rows->map [col-config bat]
@@ -47,18 +48,8 @@
           (recur (inc row) (conj rcrds rec)))
         rcrds))))
 
-(defn fs-path [path]
-  (org.apache.hadoop.fs.Path. path))
-
 (defn reader [path conf]
   (org.apache.orc.OrcFile/createReader path (org.apache.orc.OrcFile/readerOptions conf)))
-
-(defn batch [rdr]
-  (.createRowBatch (.getSchema rdr)))
-
-;;;
-;;; --- NEW ---
-;;;
 
 (defn write [dest-path rows thrd-n]
   (if (> (count rows) 0)
@@ -66,12 +57,13 @@
       (println (format "Writing %s" dest-path))
       (try
         (.write wtr (json/write-str rows))
+        (println (format "Done writing %s" dest-path))
 	(catch Exception e
 	  (println e)))
       (println (format "count.writer.thread_%s=%s" thrd-n (count rows))))
     (println (format "Not writing %s; no records" dest-path))))
 
-(defn- writer [in-ch prefix n]
+(defn start-writers [in-ch prefix n]
   (let [out-ch (async/chan)
         active-threads (atom n)
         filename #(format "%s-part-%d-%d.json" %1 %2 %3)] ; <pfx>-part-<thrd-no>-<grp-n>.json
@@ -80,8 +72,8 @@
         (println (format "Staring writer thread-%d" thrd-n))
         (loop [grp-n 0]
           (if-let [rows (async/<!! in-ch)]
-            (do
-              (write (filename prefix thrd-n grp-n) rows thrd-n)
+            (let [file (filename prefix thrd-n grp-n)] 
+              (write file rows thrd-n)
 	      (recur (inc grp-n)))
 	    (do
               (swap! active-threads dec)
@@ -90,21 +82,34 @@
                 (async/close! out-ch)))))))
     out-ch))
 
+(defn start-worker [in-ch conf src-path col-headers col-handlers limit]
+  (let [rdr (reader (org.apache.hadoop.fs.Path. src-path) conf)
+        bat (.createRowBatch (.getSchema rdr))]
+    (with-async-record-reader [rr (.rows rdr)]
+      (println "Starting worker thread...")
+      (loop [n 0
+             acc []]
+        ;; TODO: consider better ways of row accumulation / header init
+        (if (.nextBatch rr bat)
+	  (let [rows (rows->map (col-handlers bat) bat)
+	        total (+ (count rows) n)]
+	    (if (<= total limit)
+              (recur total (concat acc rows))
+	      (do
+	        (async/>!! in-ch (concat [(col-headers bat)] acc rows))
+	        (recur 0 []))))
+          (do
+	    (async/>!! in-ch acc)
+	    (async/close! in-ch)))))))
 
-(defn process [in-ch conf src-path limit column-handlers]
-  (with-async-batches [rdr (reader (fs-path src-path) conf)
-                       bat (batch rdr)
-		       ch in-ch
-                       wrt-limit limit]
-    (rows->map (column-handlers bat) bat)))
 
-(defn run [conf src-path dest-path-prefix limit column-handlers]
-  (let [pipe (async/chan)]
-    (process pipe conf src-path limit column-handlers)
+(defn run [conf src-path dest-path-prefix col-headers col-handlers wrt-thread-count limit]
+  (let [pipe (async/chan buffer-size)]
+    (start-worker pipe conf src-path col-headers col-handlers limit)
     ;; Thread macro uses daemon threads so we must explicitly block
     ;; until all writer threads are complete to prevent premature
     ;; termination of main thread.
-    (async/<!! (writer pipe dest-path-prefix 2))))
+    (async/<!! (start-writers pipe dest-path-prefix wrt-thread-count))))
 
-(defn orc->json [src-path dest-path-prefix limit column-handlers]
-  (run (orc-config) src-path dest-path-prefix limit column-handlers))
+(defn orc->json [src-path dest-path-prefix col-headers col-handlers wrt-thread-count limit]
+  (run (orc-config) src-path dest-path-prefix col-headers col-handlers wrt-thread-count limit))

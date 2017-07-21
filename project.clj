@@ -1,4 +1,4 @@
-(defproject orc "0.2.0-SNAPSHOT"
+(defproject orc "0.3.0-SNAPSHOT"
   :description "ORC -> json converter"
   :url "https://github.com/nfcharles/clj-orc.git"
   :license {:name "Eclipse Public License"
