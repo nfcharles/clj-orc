@@ -21,18 +21,44 @@ lein uberjar
 
 (def foo
   (list
-    {:name "f1" :type "string" }
-    {:name "f2" :type "int"    }))
+    {:name "field1" :type "string" }
+    {:name "field2" :type "int"    }
+    {:name "field3" :type "int"    }))
 
 (def bar
   (list
-    {:name "f1" :type "int"   }
-    {:name "f2" :type "strng" }))
+    {:name "field1" :type "int"   }
+    {:name "field2" :type "strng" }))
 
-(defn column-handlers [val]
-  (val 
-    :foo (deser/col-handlers foo)
-    :bar (deser/col-handlers bar)
+(defn column-handlers [bat]
+  (case (.numCols bat)
+    3 (deser/col-handlers foo)
+    2 (deser/col-handlers bar)
+    (throw (java.lang.Exception "Unknown configuration"))))
+
+(defn hdr-reducer [acc item]
+  (assoc acc (item 0) ((item 1) :name)))
+
+;; The first record of all output files are a header; field names in all
+;; subsequent records are swapped for positional numbers for memory optimization.
+;; e.g.
+;; [
+;;   {
+;;     "0" : "field1",
+;;     "1" : "field2",
+;;     "3" : "field3"
+;;   },
+;;   {
+;;     "0" : "value1",
+;;     "1" : "value2",
+;;     "2" : "value3"
+;;   }
+;; ]
+;;
+(defn column-headers [bat]
+  (case (.numCols bat)
+    3 (reduce hdr-reducer (map vector (range 2) foo))
+    2 (reduce hdr-reducer (map vector (range 2) bar))
     (throw (java.lang.Exception "Unknown configuration"))))
 ```
 
@@ -43,11 +69,11 @@ lein uberjar
   (:require [orc.reader :as reader])  
   (:gen-class))
 
-(def source-path "...")
-(def out-path "...")
-(orc->json source-path out-path (fields/column-handlers :foo))
-
-; do something w/ files
+(def src-path "/tmp/test.orc")
+(def dest-path-prefix "/tmp/translated/test")
+(def wrt-thread-count 2)
+(def file-limit 4096) ; increments of 1024
+(orc->json src-path dest-path-prefix fields/column-headers fields/column-handlers wrt-thread-count file-limit)
 ```
 
 ### Convert local ORC data and push to remote location
@@ -58,11 +84,14 @@ lein uberjar
   (:require [orc.macro :refer [with-tmp-workspace]])
   (:gen-class))
 
-(def source-path "...")
+(def src-path "/tmp/test.orc")
+(def wrt-thread-count 2)
+(def file-limit 4096) ; increments of 1024
 (with-tmp-workspace [out-path "examples"]
-  (orc->json source-path out-path (fields/column-handlers :foo))
+  (let [dest-path-prefix (format "%s/test" ws)]
+    (orc->json src-path dest-path-prefix fields/column-headers fields/column-handlers wrt-thread-count file-limit)
 
-  ; push files at 'out-path' to remote location
+    ; push files in workspace to remote location
 ```
 
 ## TODO

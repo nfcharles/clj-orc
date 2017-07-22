@@ -39,7 +39,7 @@
         (recur (inc col-n) (rest col-conf) (assoc! rcrd col-n val)))
       (persistent! rcrd))))
 
-(defn rows->map [col-config bat]
+(defn rows->map-list [col-config bat]
   (let [n-rows (.count bat)]
     (loop [row 0
            rcrds []]
@@ -69,11 +69,11 @@
         filename #(format "%s-part-%d-%d.json" %1 %2 %3)] ; <pfx>-part-<thrd-no>-<grp-n>.json
     (dotimes [thrd-n n]
       (async/thread
-        (println (format "Staring writer thread-%d" thrd-n))
+        (println (format "Staring writer thread-%d..." thrd-n))
         (loop [grp-n 0]
           (if-let [rows (async/<!! in-ch)]
-            (let [file (filename prefix thrd-n grp-n)] 
-              (write file rows thrd-n)
+            (do
+              (write (filename prefix thrd-n grp-n) rows thrd-n)
 	      (recur (inc grp-n)))
 	    (do
               (swap! active-threads dec)
@@ -91,9 +91,9 @@
              acc []]
         ;; TODO: consider better ways of row accumulation / header init
         (if (.nextBatch rr bat)
-	  (let [rows (rows->map (col-handlers bat) bat)
+	  (let [rows (rows->map-list (col-handlers bat) bat)
 	        total (+ (count rows) n)]
-	    (if (<= total limit)
+	    (if (< total limit)
               (recur total (concat acc rows))
 	      (do
 	        (async/>!! in-ch (concat [(col-headers bat)] acc rows))
