@@ -1,28 +1,41 @@
 (ns orc.deser
+  (import [org.apache.hadoop.hive.ql.exec.vector ColumnVector
+                                                 BytesColumnVector
+						 LongColumnVector
+                                                 DoubleColumnVector])
   (:gen-class))
 
 ;;; All deserializer functions expect ColumnVector classes as first
 ;;; argument and integer row number as second.
 
 
-(defn string [col row-n]
+(defn bool [^LongColumnVector col row-n]
+  (nth (.vector col) row-n))
+
+(defn string [^BytesColumnVector col row-n]
   "Returns deserialized row value."
   ;; TODO: check repeating flag for ColumnVector
   (let [buf (java.lang.StringBuilder.)]
     (.stringifyValue col buf row-n)
     buf))
 
-(defn flt [col row-n]
+(defn flt [^DoubleColumnVector col row-n]
   (let [val (nth (.vector col) row-n)]
     (if (Float/isNaN val)
       Float/MIN_VALUE
       val)))
 
-(defn dble [col row-n]
+(defn dble [^DoubleColumnVector col row-n]
   (let [val (nth (.vector col) row-n)]
     (if (Double/isNaN val)
       Double/MIN_VALUE
       val)))
+
+(defn intg [^LongColumnVector col row-n]
+  (nth (.vector col) row-n))
+
+(defn long-intg [^LongColumnVector col row-n]
+  (nth (.vector col) row-n))
 
 (defn default [col row-n]
   "Returns deserialized row value"
@@ -34,9 +47,12 @@
 
 (def type-mapper
   (hash-map
-    "string" string
-    "float"  flt
-    "double" dble))
+    "boolean" bool
+    "string"  string
+    "float"   flt
+    "double"  dble
+    "int"     intg
+    "bigint"  long-intg))
 
 (defn accum [acc name func]
   (conj acc {:name name :fn func}))
@@ -54,10 +70,10 @@
    e.g.
      {:name 'foo'  :fn string  }
      {:name 'bar'  :fn default }"
-  (loop [cts col-types
+  (loop [ctypes col-types
          acc []]
-    (if-let [col-type (first cts)]
-      (if-let [handler (type-mapper (col-type :type))]
-        (recur (rest cts) (accum acc (col-type :name) handler))
-	(recur (rest cts) (accum acc (col-type :name) default)))
+    (if-let [ctype (first ctypes)]
+      (if-let [handler (type-mapper (ctype :type))]
+        (recur (rest ctypes) (accum acc (ctype :name) handler))
+	(recur (rest ctypes) (accum acc (ctype :name) default)))
       acc)))
