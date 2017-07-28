@@ -1,8 +1,9 @@
-(ns orc.reader
+(ns orc.write
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
 	    [clojure.core.async :as async]
-	    [orc.core :as core])
+	    [orc.core :as core]
+	    [orc.read :as orc-read])
   (import [com.amazonaws AmazonClientException AmazonServiceException]
 	  [com.amazonaws.auth DefaultAWSCredentialsProviderChain]
           [com.amazonaws.services.s3 AmazonS3 AmazonS3Client]
@@ -103,7 +104,7 @@
 (defn run [conf src-path dest-path-prefix col-headers col-handlers thread-count byte-limit bkt key]
   (let [pipe (async/chan buffer-size)]
     (try
-      (core/start-worker pipe conf src-path col-headers col-handlers byte-limit)
+      (orc-read/start-worker pipe conf src-path col-headers col-handlers byte-limit)
       ;; Thread macro uses daemon threads so we must explicitly block
       ;; until all writer threads are complete to prevent premature
       ;; termination of main thread.
@@ -113,4 +114,4 @@
 
 
 (defn orc->json [src-path dest-path-prefix col-headers col-handlers wrt-thread-count byte-limit bkt key]
-  (run (core/orc-config) src-path dest-path-prefix col-headers col-handlers wrt-thread-count byte-limit bkt key))
+  (run (orc-read/config) src-path dest-path-prefix col-headers col-handlers wrt-thread-count byte-limit bkt key))

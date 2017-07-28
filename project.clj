@@ -8,7 +8,7 @@
 		 [org.clojure/core.async "0.2.374"]
 		 [orc-rw-mini "1.4.0"]]
   :repositories {"local" "file:maven_repository"}
-  :main orc.reader
+  :main orc.write
   :target-path "target/%s"
   :global-vars {*warn-on-reflection* true}
   ;:jvm-opts ["-Dcom.sun.management.jmxremote"
