@@ -4,10 +4,13 @@
   (:gen-class))
 
 
+(defn sort-key [^java.io.File f]
+  (* -1 (count (.getPath f))))
+
 (defn rm-files [root]
   ;; Sort order guarantees that all child elements are deleted
   ;; before parents.
-  (doseq [f (sort-by #(* -1 (count (.getPath %))) (file-seq root))]
+  (doseq [f (sort-by sort-key (file-seq root))]
     (io/delete-file f)))
 
 (defn mkdirp [path]
