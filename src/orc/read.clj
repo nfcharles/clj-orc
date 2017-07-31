@@ -35,18 +35,20 @@
         size (bsize ser)]
     [size ser]))
 
-(defn prepare-part
-  ([part-n xs suffix]
-    (println "Preparing accumulated records")
+(defn prep
+  ([i xs suffix]
     (if (> (count xs) 0)
       (let [data (clojure.string/join "," xs)]
-        (if (= part-n 1)
+        (if (= i 1)
           (format "%s%s" data suffix)
           ;; Need to splice data blocks (at X byte boundary) by separator char
           (format ",%s%s" data suffix)))
       suffix))
-  ([part-n xs]
-    (prepare-part part-n xs "")))
+  ([i xs]
+    (prep i xs "")))
+
+(defn payload [i s]
+  {:i i :obj s})
 
 (defn reader ^org.apache.orc.Reader [path conf]
   (OrcFile/createReader path (OrcFile/readerOptions conf)))
@@ -69,27 +71,26 @@
       (try
         (loop [byte-total 0
                bat-n 1
-               part-n 1
+               i 1
                acc []]
           (if (.nextBatch rr bat)
             (let [ser (raw->trimmed (core/rows->map-list (col-handlers bat) bat))
                   ^long size (bsize ser)
                   cur-size (+ size byte-total)]
-              (println (format "BATCH=%d SIZE=%d" bat-n size))
               (if (= bat-n 1)
                 ;; Handle first batch which requires prepended header info
                 (let [[^long sz sr] (hdr-info col-headers bat)]
                   (if (< (+ sz cur-size) byte-limit)
-                    (recur (+ sz cur-size) (inc bat-n) part-n (conj acc (format "[%s,%s" sr ser)))
-                    (async/>!! pipe [part-n (format "[%s,%s" sr ser)])))
+                    (recur (+ sz cur-size) (inc bat-n) i (conj acc (format "[%s,%s" sr ser)))
+                    (async/>!! pipe (payload i (format "[%s,%s" sr ser)))))
                  ;; General case, accumulate serialized rows
                 (if (< cur-size byte-limit)
-                  (recur cur-size (inc bat-n) part-n (conj acc ser))
-                  (if (async/>!! pipe [part-n (prepare-part part-n (conj acc ser))])
-                    (recur 0 (inc bat-n) (inc part-n) [])
+                  (recur cur-size (inc bat-n) i (conj acc ser))
+                  (if (async/>!! pipe (payload i (prep i (conj acc ser))))
+                    (recur 0 (inc bat-n) (inc i) [])
                     (println "PIPE IS CLOSED: CAN'T WRITE")))))
             (do
-              (async/>!! pipe [part-n (prepare-part part-n acc "]")])
+              (async/>!! pipe (payload i (prep i acc "]")))
               (async/close! pipe))))
         (catch Exception e
           (println "Error reading records")
