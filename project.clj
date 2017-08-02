@@ -1,4 +1,4 @@
-(defproject orc "0.4.0-SNAPSHOT"
+(defproject orc "0.4.1-SNAPSHOT"
   :description "ORC -> json converter"
   :url "https://github.com/nfcharles/clj-orc.git"
   :license {:name "Eclipse Public License"
@@ -15,5 +15,4 @@
   ;           "-Dcom.sun.management.jmxremote.authenticate=false"
   ;           "-Dcom.sun.management.jmxremote.port=43210"]
   :profiles {:uberjar {:aot :all}
-             :dev {:dependencies [[com.amazonaws/aws-java-sdk-s3 "1.11.163"]
-                                  [com.amazonaws/aws-java-sdk-core "1.11.163"]]}})
+             :dev {:dependencies [[org.apache.hadoop/hadoop-aws "2.8.1"]]}})

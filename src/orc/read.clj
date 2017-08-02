@@ -10,29 +10,36 @@
   (:gen-class))
 
 
-(def config-mapping
+(def default-mapping
   (hash-map
-    "fs.file.impl" "org.apache.hadoop.fs.LocalFileSystem"))
+    "fs.file.impl" {:value "org.apache.hadoop.fs.LocalFileSystem"}))
 
-(defn config [& ops]
-  (let [conf (Configuration.)]
-    (println "CONFIGURATION")
-    (doseq [[k v] config-mapping]
-      (println (format "%s=%s" k v))
-      (.set conf k v))
-    conf))
+(defn configure
+  ([mapping]
+    (let [conf (Configuration.)]
+      (println ">> Configuration <<")
+      (doseq [[k v] mapping]
+        (let [type_ (v :type)
+	      value (v :value)]
+          (if (= type_ :private)
+	    (println (format "%s=%s" k (apply str (repeat (count value) "*"))))
+            (println (format "%s=%s" k value)))
+          (.set conf k value)))
+      conf))
+   ([]
+     (configure default-mapping)))
 
 (defn raw->trimmed [coll]
   (let [s (json/write-str coll)]
     (subs s 1 (dec (count s)))))
 
-(defn bsize [^java.lang.String s]
+(defn byte-count [^java.lang.String s]
   (count (.getBytes s)))
 
 (defn hdr-info [col-headers bat]
   (let [hdr  (col-headers bat)
         ser  (json/write-str (col-headers bat))
-        size (bsize ser)]
+        size (byte-count ser)]
     [size ser]))
 
 (defn prep
@@ -41,7 +48,7 @@
       (let [data (clojure.string/join "," xs)]
         (if (= i 1)
           (format "%s%s" data suffix)
-          ;; Need to splice data blocks (at X byte boundary) by separator char
+          ;; Need to join data blocks (at X byte boundary) by separator char
           (format ",%s%s" data suffix)))
       suffix))
   ([i xs]
@@ -59,7 +66,7 @@
 (defn batch ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch [^org.apache.orc.TypeDescription sch]
   (.createRowBatch sch))
 
-(defn start-worker [pipe conf ^java.lang.String src-path col-headers col-handlers byte-limit]
+(defn start-worker [pipe conf src-path col-headers col-handlers byte-limit]
   (let [rdr (reader (Path. src-path) conf)
         bat (batch (schema rdr))]
     (with-async-record-reader [rr (.rows rdr)]
@@ -75,7 +82,7 @@
                acc []]
           (if (.nextBatch rr bat)
             (let [ser (raw->trimmed (core/rows->map-list (col-handlers bat) bat))
-                  ^long size (bsize ser)
+                  ^long size (byte-count ser)
                   cur-size (+ size byte-total)]
               (if (= bat-n 1)
                 ;; Handle first batch which requires prepended header info
