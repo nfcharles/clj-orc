@@ -66,7 +66,7 @@
 (defn batch ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch [^org.apache.orc.TypeDescription sch]
   (.createRowBatch sch))
 
-(defn start-worker [pipe conf src-path col-headers col-handlers byte-limit]
+(defn start-worker [pipe conf ^java.net.URI src-path col-headers col-handlers byte-limit]
   (let [rdr (reader (Path. src-path) conf)
         bat (batch (schema rdr))]
     (with-async-record-reader [rr (.rows rdr)]
