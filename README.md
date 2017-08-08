@@ -1,46 +1,51 @@
 # clj-orc
 
-clj-orc is a library for converting ORC format files into json.
+clj-orc is a library for translating ORC files into json.
 
 ## Installation
 
-Build project via lein
+Fork repo and build project via lein.
 
 ```bash
 lein uberjar
 ```
 
-## Examples
+## Configuration
 
-### Set up column handlers for deserializing data
+Field/Type mappings are required for each ORC data representation.  They are used to create column readers
+responsible for data deserialization.  See example below:
+
+### Column handlers
 ```clojure
 (ns examples.fields
-  (:require [orc.deser :as deser])
+  (:require [orc.col :as col])
   (:gen-class))
 
 
+;; Schema 1
 (def foo
   (list
     {:name "field1" :type "string" }
     {:name "field2" :type "int"    }
     {:name "field3" :type "int"    }))
 
+;; Schema 2
 (def bar
   (list
     {:name "field1" :type "int"   }
     {:name "field2" :type "strng" }))
 
-(defn column-handlers [bat]
+(defn column-handlers [^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
   (case (.numCols bat)
-    3 (deser/col-handlers foo)
-    2 (deser/col-handlers bar)
+    3 (col/handlers foo) ; list of deser functions for each column
+    2 (col/handlers bar) ; list of deser functions for each column
     (throw (java.lang.Exception "Unknown configuration"))))
 
 (defn hdr-reducer [acc item]
   (assoc acc (item 0) ((item 1) :name)))
 
-;; The first record of all output files are a header; field names in all
-;; subsequent records are swapped for positional numbers for memory optimization.
+;; Header records are used for memory optimization.
+;; Field names are mapped to their ordinal values.
 ;; e.g.
 ;; [
 ;;   {
@@ -57,47 +62,70 @@ lein uberjar
 ;;
 (defn column-headers [bat]
   (case (.numCols bat)
-    3 (reduce hdr-reducer (map vector (range 2) foo))
+    3 (reduce hdr-reducer (map vector (range 3) foo))
     2 (reduce hdr-reducer (map vector (range 2) bar))
     (throw (java.lang.Exception "Unknown configuration"))))
 ```
 
-### Convert local ORC data to json
+### Hadoop
+Hadoop configuration is optional.  Default configuration assumes a local filesystem for reading
+ORC.  The following example demonstrates configuring the reader for remote reading - Amazon S3.
+
 ```clojure
-(ns examples.runner
-  (:require [examples.fields :as fields])
-  (:require [orc.reader :as reader])  
+(ns examples.config
+  (:require [orc.read :as orc-read])
   (:gen-class))
 
-(def src-path "/tmp/test.orc")
-(def dest-path-prefix "/tmp/translated/test")
-(def wrt-thread-count 2)
-(def file-limit 4096) ; increments of 1024
-(orc->json src-path dest-path-prefix fields/column-headers fields/column-handlers wrt-thread-count file-limit)
-```
+(def s3-resource-mapping
+  (hash-map
+    "fs.file.impl" {:value "org.apache.hadoop.fs.s3native.NativeS3FileSystem"}
+    "fs.s3n.awsAccessKeyId" {:value access-key-id :type :private}
+    "fs.s3n.awsSecretAccessKey" {:value secret-key :type :private}))
 
-### Convert local ORC data and push to remote location
+(orc-read/configure s3-resource-mapping)
+```
+```:private``` configuration values are obfuscated during logging.
+
+## Examples
+### Low level batch translation
+#### Use orc core methods to convert ```VectorizedRowBatch``` to list of maps
 ```clojure
-(ns examples.runner
-  (:require [examples.fields :as fields])
-  (:require [orc.reader :as reader])
-  (:require [orc.macro :refer [with-tmp-workspace]])
+(ns examples.driver
+  (:require [orc.core :as orc-core]
+            [example.fields :as fields])
   (:gen-class))
 
-(def src-path "/tmp/test.orc")
-(def wrt-thread-count 2)
-(def file-limit 4096) ; increments of 1024
-(with-tmp-workspace [out-path "examples"]
-  (let [dest-path-prefix (format "%s/test" ws)]
-    (orc->json src-path dest-path-prefix fields/column-headers fields/column-handlers wrt-thread-count file-limit)
-
-    ; push files in workspace to remote location
+(loop [acc []]
+  (if (.nextBatch reader batch)
+    (recur conj acc (orc-core/rows->map-list (fields/column-handlers batch) batch))
+    acc))
 ```
+
+### Multithreaded Processing
+#### Use orc read worker to concurrently read and process ORC data
+```clojure
+(ns examples.driver
+  (:require [orc.read :as orc-read]
+            [example.fields :as fields])
+  (:gen-class))
+
+(let [ch (orc-read/start-worker conf uri fields/column-headers fields/column-handlers batch-size)]
+  (loop [acc []]
+    (if-let [batch (async/<!! ch)]
+      (do
+        ;; where batch is list of hash-maps
+        ;; [{ 'col_1' 'foo'
+        ;;   'col_2' 'bar'
+        ;;   'col_n' 'baz'},
+        ;;  ...]
+        (conj acc (process batch))
+        (recur))
+      acc)))
+```
+```batch-size``` sets how many ORC records are batched into memory per iteration.
 
 ## TODO
- * Memory optimizations
- * Multi threaded processing
- * Unit testing
+ * Exhaustive unit testing
  * Complex type deserializers
 
 ## License

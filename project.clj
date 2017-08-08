@@ -1,4 +1,4 @@
-(defproject orc "0.4.1-SNAPSHOT"
+(defproject orc "0.4.2-SNAPSHOT"
   :description "ORC -> json converter"
   :url "https://github.com/nfcharles/clj-orc.git"
   :license {:name "Eclipse Public License"
@@ -7,6 +7,7 @@
                  [org.clojure/data.json "0.2.6"]
 		 [org.clojure/core.async "0.2.374"]
 		 [orc-rw-mini "1.4.0"]]
+  :main orc.read
   :repositories {"local" "file:maven_repository"}
   :target-path "target/%s"
   :global-vars {*warn-on-reflection* true}

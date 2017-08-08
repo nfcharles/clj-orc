@@ -1,20 +1,24 @@
-(ns orc.deser
+(ns orc.col
   (import [org.apache.hadoop.hive.ql.exec.vector ColumnVector
                                                  BytesColumnVector
 						 LongColumnVector
                                                  DoubleColumnVector])
   (:gen-class))
 
-;;; All deserializer functions expect ColumnVector classes as first
-;;; argument and integer row number as second.
 
+;;; Deserializer function interface:
+;;;
+;;;   (fn <ColumnVector>arg1, <int>arg2)
+;;;
+;;; where,
+;;;   arg1: ColumnVector classes
+;;;   arg2: row number
 
 (defn bool [^LongColumnVector col row-n]
   (nth (.vector col) row-n))
 
 (defn string [^BytesColumnVector col row-n]
   "Returns deserialized row value."
-  ;; TODO: check repeating flag for ColumnVector
   (let [buf (java.lang.StringBuilder.)]
     (.stringifyValue col buf row-n)
     buf))
@@ -22,13 +26,13 @@
 (defn flt [^DoubleColumnVector col row-n]
   (let [val (nth (.vector col) row-n)]
     (if (Float/isNaN val)
-      Float/MIN_VALUE
+      nil
       val)))
 
 (defn dble [^DoubleColumnVector col row-n]
   (let [val (nth (.vector col) row-n)]
     (if (Double/isNaN val)
-      Double/MIN_VALUE
+      nil
       val)))
 
 (defn intg [^LongColumnVector col row-n]
@@ -39,7 +43,6 @@
 
 (defn default [col row-n]
   "Returns deserialized row value"
-  ;; TODO: check repeating flag for ColumnVector
   (nth (.vector col) row-n))
 
 
@@ -57,7 +60,7 @@
 (defn accum [acc name func]
   (conj acc {:name name :fn func}))
 
-(defn col-handlers [col-types]
+(defn handlers [col-types]
   "Returns a list of maps where each map contains a col deserializer.
 
    Input is list of maps defining column names and types.
