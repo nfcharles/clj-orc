@@ -7,7 +7,7 @@
                  [org.clojure/data.json "0.2.6"]
 		 [org.clojure/core.async "0.2.374"]
 		 [orc-rw-mini "1.4.0"]]
-  :main orc.read
+  :main orc.json
   :repositories {"local" "file:maven_repository"}
   :target-path "target/%s"
   :global-vars {*warn-on-reflection* true}

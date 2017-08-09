@@ -1,7 +1,7 @@
 (ns orc.col
   (import [org.apache.hadoop.hive.ql.exec.vector ColumnVector
                                                  BytesColumnVector
-						 LongColumnVector
+                                                 LongColumnVector
                                                  DoubleColumnVector])
   (:gen-class))
 

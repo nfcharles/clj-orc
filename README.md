@@ -97,7 +97,7 @@ ORC.  The following example demonstrates configuring the reader for remote readi
 
 (loop [acc []]
   (if (.nextBatch reader batch)
-    (recur conj acc (orc-core/rows->map-list (fields/column-handlers batch) batch))
+    (recur conj acc (orc-core/rows->maps (fields/column-handlers batch) batch))
     acc))
 ```
 
@@ -114,7 +114,7 @@ ORC.  The following example demonstrates configuring the reader for remote readi
     (if-let [batch (async/<!! ch)]
       (do
         ;; where batch is list of hash-maps
-        ;; [{ 'col_1' 'foo'
+        ;; [{'col_1' 'foo'
         ;;   'col_2' 'bar'
         ;;   'col_n' 'baz'},
         ;;  ...]
@@ -123,6 +123,26 @@ ORC.  The following example demonstrates configuring the reader for remote readi
       acc)))
 ```
 ```batch-size``` sets how many ORC records are batched into memory per iteration.
+
+#### Use orc json streamer to concurrently stream and process json chunks
+```clojure
+(ns example.driver
+  (:require [orc.json :as orc-json]
+            [example.fields :as fields])
+  (:gen-class))
+
+(let [ch (orc-json/start-streamer conf uri fields/column-headers fields/column-handlers byte-limit batch-size)]
+  ;; First value from stream is stream metadata
+  (println (async/<!! ch))
+  (loop []
+    (if-let [chunk (async/<!! ch)]
+      (process chunk)
+      (recur))))
+```
+The last two arguments of the json streamer are optional.  ```byte-limit``` is the minimum number of bytes for each
+json chunk.  ```meta``` is a 2-arity function that takes ```TypeDescrition``` and ```VectorizedRowBatch``` objects as
+arguments. The return value is the first value in the output stream.  If no function is provided a default function
+will provide a default value.
 
 ## TODO
  * Exhaustive unit testing

@@ -65,7 +65,7 @@
         (try
           (loop [i 1]
             (if (.nextBatch rr bat)
-              (let [rows (core/rows->map-list (col-handlers bat) bat)]
+              (let [rows (core/rows->maps (col-handlers bat) bat)]
                 (if (= i 1)
 	          ; Construct header record
                   (let [hdr (col-headers bat)]

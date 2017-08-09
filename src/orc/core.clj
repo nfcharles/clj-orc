@@ -18,7 +18,7 @@
         (recur (inc col-n) (rest col-conf) (assoc! rcrd col-n val)))
       (persistent! rcrd))))
 
-(defn rows->map-list [col-config ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
+(defn rows->maps [col-config ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
   (let [n-rows (.count bat)]
     (loop [row 0
            rcrds []]
