@@ -136,8 +136,8 @@ ORC.  The following example demonstrates configuring the reader for remote readi
   (println (async/<!! ch))
   (loop []
     (if-let [chunk (async/<!! ch)]
-      (process chunk)
-      (recur))))
+      (let [ret (process chunk)]
+        (recur)))))
 ```
 The last two arguments of the json streamer are optional.  ```byte-limit``` is the minimum number of bytes for each
 json chunk.  ```meta``` is a 2-arity function that takes ```TypeDescrition``` and ```VectorizedRowBatch``` objects as
