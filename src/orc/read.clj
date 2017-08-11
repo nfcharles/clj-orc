@@ -80,8 +80,8 @@
               (async/close! out)))
           (catch Exception e
             (println "Error reading records.")
-            (println e)
-            (async/close! out))))
+            (async/close! out)
+            (throw e))))
       out))
   ([conf ^java.net.URI src-path col-headers col-handlers]
     (start-worker conf src-path col-headers col-handlers batch-size)))

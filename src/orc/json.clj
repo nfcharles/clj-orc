@@ -5,9 +5,7 @@
 	    [orc.core :as core]
 	    [orc.read :as orc-read]
             [orc.macro :refer [with-async-record-reader]])
-  (import [org.apache.orc OrcFile]
-          [org.apache.hadoop.fs Path]
-          [org.apache.hadoop.conf Configuration])
+  (import [org.apache.hadoop.fs Path])
   (:gen-class))
 
 
@@ -30,7 +28,8 @@
       (let [data (clojure.string/join "," xs)]
         (if (= i 1)
           (format "%s%s" data suffix)
-          ;; Need to join data blocks (at X byte boundary) by separator char
+          ;; Chunks 2..n must be prepended with delimiter for proper
+          ;; downstream reassembly.
           (format ",%s%s" data suffix)))
       suffix))
   ([i xs]
@@ -39,32 +38,20 @@
 (defn payload [i s]
   {:i i :chunk s})
 
-(defn reader ^org.apache.orc.Reader [path conf]
-  (OrcFile/createReader path (OrcFile/readerOptions conf)))
-
-(defn schema ^org.apache.orc.TypeDescription [^org.apache.orc.Reader rdr]
-  (.getSchema rdr))
-
-(defn batch ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch
-  ([^org.apache.orc.TypeDescription sch bat-size]
-    (.createRowBatch sch bat-size))
-  ([^org.apache.orc.TypeDescription sch]
-    (batch sch orc-read/batch-size)))
-
 (defn start-streamer
   ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size meta]
     (let [out (async/chan buffer-size)
-          rdr (reader (Path. src-path) conf)
-          des (schema rdr)
-          bat (batch des bat-size)]
+          rdr (orc-read/reader (Path. src-path) conf)
+          des (orc-read/schema rdr)
+          bat (orc-read/batch des bat-size)]
       (with-async-record-reader [rr (.rows rdr)]
         (println "Starting json streamer thread...")
         (try
           ;; First batch is special case. Get initial value for metadata
-	  ;; and header construction
-	  (.nextBatch rr bat)
+          ;; and header construction
+          (.nextBatch rr bat)
 
-	  ;; Send metadata describing json stream
+	  ;; Send stream metadata
 	  (async/>!! out (meta des bat))
 
           (let [hdr (col-headers bat)
@@ -87,8 +74,8 @@
                   (async/close! out)))))
           (catch Exception e
             (println "Error reading recording")
-            (println e)
-            (async/close! out))))
+            (async/close! out)
+            (throw e))))
       out))
   ([conf ^java.net.URI src-path col-headers col-handlers byte-limit]
     (start-streamer conf src-path col-headers col-handlers byte-limit orc-read/batch-size default-meta))
