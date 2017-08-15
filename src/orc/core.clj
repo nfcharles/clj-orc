@@ -1,6 +1,19 @@
 (ns orc.core
+  (:require [taoensso.timbre :as logging]
+            [taoensso.timbre.appenders.core :as appenders])
   (:gen-class))
 
+
+(def timestamp-opts
+  {:pattern  "yyyy-MM-dd HH:mm:ss" #_:iso8601
+   :locale   :jvm-default #_(java.util.Locale. "en")
+   :timezone :utc})
+
+(defn configure-logging [stream]
+  (logging/merge-config!
+    { :timestamp-opts timestamp-opts
+      :appenders {
+      :println (appenders/println-appender {:stream stream})}}))
 
 (defn get-col [^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat n]
   (nth (.cols bat) n))

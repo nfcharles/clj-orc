@@ -3,7 +3,16 @@
             [clojure.java.io :as io]
             [clojure.core.async :as async]
 	    [orc.core :as core]
-            [orc.macro :refer [with-async-record-reader]])
+            [orc.macro :refer [with-async-record-reader]]
+            [taoensso.timbre :as timbre
+                             :refer [log
+                                     trace
+                                     debug
+                                     info
+                                     warn
+                                     error
+                                     fatal
+                                     report]])
   (import [org.apache.orc OrcFile]
           [org.apache.hadoop.fs Path]
           [org.apache.hadoop.conf Configuration])
@@ -30,13 +39,13 @@
   as private will be obfuscated."
   ([mapping]
     (let [conf (Configuration.)]
-      (println "*** Configuration ***")
+      (info "*** Configuration ***")
       (doseq [[k v] mapping]
         (let [type_ (v :type)
 	      value (v :value)]
           (if (= type_ :private)
-	    (println (format "%s=%s" k (apply str (repeat (count value) "*"))))
-            (println (format "%s=%s" k value)))
+            (info (format "%s=%s" k (apply str (repeat (count value) "*"))))
+            (info (format "%s=%s" k value)))
           (.set conf k value)))
       conf))
    ([]
@@ -59,29 +68,32 @@
     (let [out (async/chan buffer-size)
           rdr (reader (Path. src-path) conf)
 	  des (schema rdr)
-          bat (batch des bat-size)]
+          ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat (batch des bat-size)]
       (with-async-record-reader [rr (.rows rdr)]
-        (println "Starting worker thread...")
+        (info "Starting worker thread...")
         (try
-          (loop [i 1]
+          ;; First batch is special case. Get initial value for header construction
+          (.nextBatch rr bat)
+
+          ;; Send first translated batch
+          (async/>!! out (col-headers bat))
+          (async/>!! out {:i 1 :rows (core/rows->maps (col-handlers bat) bat)})
+
+          (loop [i 2
+                 total (.count bat)]
             (if (.nextBatch rr bat)
               (let [rows (core/rows->maps (col-handlers bat) bat)]
-                (if (= i 1)
-	          ; Construct header record
-                  (let [hdr (col-headers bat)]
-                    (clojure.pprint/pprint hdr)
-                    (async/>!! out {:i 0 :rows hdr})
-                    (if (async/>!! out {:i i :rows rows})
-                      (recur (inc i))
-                      (println "Channel is closed; cannot write.")))
-                  (if (async/>!! out {:i i :rows rows})
-                    (recur (inc i))
-                    (println "Channel is closed; cannot write."))))
-              (async/close! out)))
+                (if (async/>!! out {:i i :rows rows})
+                  (recur (inc i) (+ total (.count bat)))
+                  (warn "Channel is closed; cannot write.")))
+              (do
+                (info (format "rows.count=%d" total))
+                (async/close! out))))
           (catch Exception e
-            (println "Error reading records.")
             (async/close! out)
-            (throw e))))
+            (throw e))
+	  (finally
+	    (info "Thread finished."))))
       out))
   ([conf ^java.net.URI src-path col-headers col-handlers]
     (start-worker conf src-path col-headers col-handlers batch-size)))
