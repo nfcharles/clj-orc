@@ -19,9 +19,7 @@
 
 (defn string [^BytesColumnVector col row-n]
   "Returns deserialized row value."
-  (let [buf (java.lang.StringBuilder.)]
-    (.stringifyValue col buf row-n)
-    buf))
+  (.toString col row-n))
 
 (defn flt [^DoubleColumnVector col row-n]
   (let [val (nth (.vector col) row-n)]
