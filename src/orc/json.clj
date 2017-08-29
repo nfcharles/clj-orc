@@ -47,7 +47,7 @@
 (defn payload [i s]
   {:i i :chunk s})
 
-(defn start-streamer
+(defn start
   ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size meta]
     (let [out (async/chan buffer-size)
           rdr (orc-read/reader (Path. src-path) conf)
@@ -90,6 +90,6 @@
 	    (info "Thread finished."))))
       out))
   ([conf ^java.net.URI src-path col-headers col-handlers byte-limit]
-    (start-streamer conf src-path col-headers col-handlers byte-limit orc-read/batch-size default-meta))
+    (start conf src-path col-headers col-handlers byte-limit orc-read/batch-size default-meta))
   ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size]
-    (start-streamer conf src-path col-headers col-handlers byte-limit bat-size default-meta)))
+    (start conf src-path col-headers col-handlers byte-limit bat-size default-meta)))

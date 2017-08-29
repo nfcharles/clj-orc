@@ -63,14 +63,14 @@
   ([^org.apache.orc.TypeDescription sch]
     (batch sch batch-size)))
 
-(defn start-worker
+(defn start
   ([conf ^java.net.URI src-path col-headers col-handlers bat-size]
     (let [out (async/chan buffer-size)
           rdr (reader (Path. src-path) conf)
 	  des (schema rdr)
           ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat (batch des bat-size)]
       (with-async-record-reader [rr (.rows rdr)]
-        (info "Starting worker thread...")
+        (info "Starting reader thread...")
         (try
           ;; First batch is special case. Get initial value for header construction
           (.nextBatch rr bat)
@@ -96,4 +96,4 @@
 	    (info "Thread finished."))))
       out))
   ([conf ^java.net.URI src-path col-headers col-handlers]
-    (start-worker conf src-path col-headers col-handlers batch-size)))
+    (start conf src-path col-headers col-handlers batch-size)))

@@ -26,12 +26,12 @@
           _ (orc-fixture/write wtr bat 10
 	      [(.vector (aget (.cols bat) 0)) identity]
 	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
-          ch (orc-json/start-streamer (orc-read/configure)
-                                      (URI. src)
-                                      (partial orc-fixture/column-headers fields)
-                                      (partial orc-fixture/column-handlers fields)
-                                      25
-                                      2)]
+          ch (orc-json/start (orc-read/configure)
+                             (URI. src)
+                             (partial orc-fixture/column-headers fields)
+                             (partial orc-fixture/column-handlers fields)
+                             25
+                             2)]
       (testing "translate ORC to json repr: 1"
         (is (= (async/<!! ch) "JSON Stream"))
         (is (= (async/<!! ch) {:i 1, :chunk "[{\"0\":\"f1\",\"1\":\"f2\"},{\"0\":0,\"1\":0},{\"0\":1,\"1\":2},{\"0\":2,\"1\":4},{\"0\":3,\"1\":6}"}))

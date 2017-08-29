@@ -109,7 +109,7 @@ ORC.  The following example demonstrates configuring the reader for remote readi
             [example.fields :as fields])
   (:gen-class))
 
-(let [ch (orc-read/start-worker conf uri fields/column-headers fields/column-handlers batch-size)]
+(let [ch (orc-read/start conf uri fields/column-headers fields/column-handlers batch-size)]
   (loop [acc []]
     (if-let [batch (async/<!! ch)]
       (do
@@ -131,7 +131,7 @@ ORC.  The following example demonstrates configuring the reader for remote readi
             [example.fields :as fields])
   (:gen-class))
 
-(let [ch (orc-json/start-streamer conf uri fields/column-headers fields/column-handlers byte-limit batch-size)]
+(let [ch (orc-json/start conf uri fields/column-headers fields/column-handlers byte-limit batch-size)]
   ;; First value from stream is stream metadata
   (println (async/<!! ch))
   (loop []

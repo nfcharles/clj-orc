@@ -25,11 +25,11 @@
           _ (orc-fixture/write wtr bat 10
 	      [(.vector (aget (.cols bat) 0)) identity]
 	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
-          ch (orc-read/start-worker (orc-read/configure)
-                                    (URI. src)
-                                    (partial orc-fixture/column-headers fields)
-                                    (partial orc-fixture/column-handlers fields)
-                                    4)]
+          ch (orc-read/start (orc-read/configure)
+                             (URI. src)
+                             (partial orc-fixture/column-headers fields)
+                             (partial orc-fixture/column-handlers fields)
+                             4)]
       (testing "translate ORC to native clj repr: 1"
         (is (= (async/<!! ch) {0 "f1", 1 "f2"}))
         (is (= (async/<!! ch) {:i 1, :rows [{0 0, 1 0} {0 1, 1 2} {0 2, 1 4} {0 3, 1 6}]}))
