@@ -71,10 +71,10 @@
    e.g.
      {:name 'foo'  :fn string  }
      {:name 'bar'  :fn default }"
-  (loop [ctypes col-types
+  (loop [types col-types
          acc []]
-    (if-let [ctype (first ctypes)]
-      (if-let [handler (type-mapper (ctype :type))]
-        (recur (rest ctypes) (accum acc (ctype :name) handler))
-	(recur (rest ctypes) (accum acc (ctype :name) default)))
+    (if-let [col-type (first types)]
+      (if-let [handler (type-mapper (col-type :type))]
+        (recur (rest types) (accum acc (col-type :name) handler))
+	(recur (rest types) (accum acc (col-type :name) default)))
       acc)))

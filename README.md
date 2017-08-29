@@ -33,7 +33,7 @@ responsible for data deserialization.  See example below:
 (def bar
   (list
     {:name "field1" :type "int"   }
-    {:name "field2" :type "strng" }))
+    {:name "field2" :type "string" }))
 
 (defn column-handlers [^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
   (case (.numCols bat)
@@ -60,10 +60,10 @@ responsible for data deserialization.  See example below:
 ;;   }
 ;; ]
 ;;
-(defn column-headers [bat]
+(defn column-headers [^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
   (case (.numCols bat)
-    3 (reduce hdr-reducer (map vector (range 3) foo))
-    2 (reduce hdr-reducer (map vector (range 2) bar))
+    3 (reduce hdr-reducer {} (map vector (range 3) foo))
+    2 (reduce hdr-reducer {} (map vector (range 2) bar))
     (throw (java.lang.Exception "Unknown configuration"))))
 ```
 
