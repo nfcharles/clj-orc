@@ -1,9 +1,10 @@
 (ns orc.col-test
   (:require [clojure.test :refer :all]
             [clojure.core.async :as async]
-            [orc.write :as orc-write]
+            [orc.fixture :as orc-fixture]
             [orc.macro :refer [with-tmp-workspace]]
             [orc.col :as orc-col]))
+
 
 (def fields (list
   {:name "foo" :type "string"}
@@ -14,5 +15,5 @@
   {:name "bar" :fn orc-col/intg}))
 
 (deftest col-test
-  (testing "Type list -> type handlers"
+  (testing "Translate type list to  type handlers"
     (is (= (orc-col/handlers fields) fields-handlers))))
