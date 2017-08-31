@@ -62,14 +62,13 @@
 
 	  ;; Send stream metadata
 	  (async/>!! out (meta des bat))
-
           (let [hdr (col-headers bat)
                 hdr-chunk (format "[%s" (json/write-str hdr))
                 first-chunk (jsonify (core/rows->maps (col-handlers bat) bat))]
             (loop [i 1
                    total (.count bat)
 	           byte-total (+ (byte-count hdr-chunk) (byte-count first-chunk))
-                   acc [hdr-chunk first-chunk]]
+                   acc (if (= "" first-chunk) [hdr-chunk] [hdr-chunk first-chunk])]
               (if (.nextBatch rr bat)
                 (let [maps (core/rows->maps (col-handlers bat) bat)
                       chunk (jsonify maps)

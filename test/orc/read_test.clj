@@ -14,8 +14,8 @@
 (orc-core/configure-logging :std-err)
 
 (deftest simple-read-test
-  (with-tmp-workspace [ws "test"]
-    (let [src (str ws "/foo.orc")
+  (with-tmp-workspace [ws "test-1"]
+    (let [src (str ws "/test.orc")
           ^TypeDescription sch (orc-fixture/schema "struct<x:int,y:int>")
           ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
 	  ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
@@ -30,9 +30,69 @@
                              (partial orc-fixture/column-headers fields)
                              (partial orc-fixture/column-handlers fields)
                              4)]
-      (testing "translate ORC to native clj repr: 1"
+      (testing "translate ORC to native clj repr: batch size 4"
         (is (= (async/<!! ch) {0 "f1", 1 "f2"}))
         (is (= (async/<!! ch) {:i 1, :rows [{0 0, 1 0} {0 1, 1 2} {0 2, 1 4} {0 3, 1 6}]}))
         (is (= (async/<!! ch) {:i 2, :rows [{0 4, 1 8} {0 5, 1 10} {0 6, 1 12} {0 7, 1 14}]}))
         (is (= (async/<!! ch) {:i 3, :rows [{0 8, 1 16} {0 9, 1 18}]}))
+        (is (= (async/<!! ch) nil)))))
+  (with-tmp-workspace [ws "test-2"]
+    (let [src (str ws "/test.orc")
+          ^TypeDescription sch (orc-fixture/schema "struct<x:int,y:int>")
+          ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
+	  ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
+          fields (list
+            {:name "f1" :type "int"}
+            {:name "f2" :type "int"})
+          _ (orc-fixture/write wtr bat 10
+	      [(.vector (aget (.cols bat) 0)) identity]
+	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
+          ch (orc-read/start (orc-read/configure)
+                             (URI. src)
+                             (partial orc-fixture/column-headers fields)
+                             (partial orc-fixture/column-handlers fields)
+                             5)]
+      (testing "translate ORC to native clj repr: batch size 5"
+        (is (= (async/<!! ch) {0 "f1", 1 "f2"}))
+        (is (= (async/<!! ch) {:i 1, :rows [{0 0, 1 0} {0 1, 1 2} {0 2, 1 4} {0 3, 1 6} {0 4, 1 8}]}))
+        (is (= (async/<!! ch) {:i 2, :rows [{0 5, 1 10} {0 6, 1 12} {0 7, 1 14} {0 8, 1 16} {0 9, 1 18}]}))
+        (is (= (async/<!! ch) nil)))))
+  (with-tmp-workspace [ws "test-3"]
+    (let [src (str ws "/test.orc")
+          ^TypeDescription sch (orc-fixture/schema "struct<x:int,y:int>")
+          ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
+	  ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
+          fields (list
+            {:name "f1" :type "int"}
+            {:name "f2" :type "int"})
+          _ (orc-fixture/write wtr bat 5
+	      [(.vector (aget (.cols bat) 0)) identity]
+	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
+          ch (orc-read/start (orc-read/configure)
+                             (URI. src)
+                             (partial orc-fixture/column-headers fields)
+                             (partial orc-fixture/column-handlers fields)
+                             5)]
+      (testing "translate ORC to native clj repr: 1 batch"
+        (is (= (async/<!! ch) {0 "f1", 1 "f2"}))
+        (is (= (async/<!! ch) {:i 1, :rows [{0 0, 1 0} {0 1, 1 2} {0 2, 1 4} {0 3, 1 6} {0 4, 1 8}]}))
+        (is (= (async/<!! ch) nil)))))
+  (with-tmp-workspace [ws "test-4"]
+    (let [src (str ws "/test.orc")
+          ^TypeDescription sch (orc-fixture/schema "struct<x:int,y:int>")
+          ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
+	  ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
+          fields (list
+            {:name "f1" :type "int"}
+            {:name "f2" :type "int"})
+          _ (orc-fixture/write wtr bat 0)
+          ch (orc-read/start (orc-read/configure)
+                             (URI. src)
+                             (partial orc-fixture/column-headers fields)
+                             (partial orc-fixture/column-handlers fields)
+                             5)]
+      (testing "translate ORC to native clj repr: empty batch"
+        (is (= (async/<!! ch) {0 "f1", 1 "f2"}))
+        (is (= (async/<!! ch) {:i 1, :rows []}))
         (is (= (async/<!! ch) nil))))))
+
