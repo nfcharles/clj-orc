@@ -60,8 +60,14 @@
 (defn column-handlers [flds ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
   (col/handlers flds))
 
-(defn hdr-reducer [acc item]
+(defn map-hdr-reducer [acc item]
   (assoc acc (item 0) ((item 1) :name)))
 
-(defn column-headers [flds ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
-  (reduce hdr-reducer {} (map vector (range (count flds)) flds)))
+(defn vector-hdr-reducer [acc item]
+  (conj acc (item :name)))
+
+(defn column-headers [flds coll-type ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
+  (case coll-type
+    :map    (reduce map-hdr-reducer {} (map vector (range (count flds)) flds))
+    :vector (reduce vector-hdr-reducer [] flds)
+    (throw (java.lang.Exception. (format "Unsupported collection type: %s" coll-type)))))

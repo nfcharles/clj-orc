@@ -5,15 +5,7 @@
 	    [orc.core :as core]
 	    [orc.read :as orc-read]
             [orc.macro :refer [with-async-record-reader]]
-            [taoensso.timbre :as timbre
-                             :refer [log
-                                     trace
-                                     debug
-                                     info
-                                     warn
-                                     error
-                                     fatal
-                                     report]])
+            [taoensso.timbre :as timbre :refer [log trace debug info warn error fatal report]])
   (import [org.apache.hadoop.fs Path])
   (:gen-class))
 
@@ -48,11 +40,12 @@
   {:i i :chunk s})
 
 (defn start
-  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size meta]
+  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size coll-type meta]
     (let [out (async/chan buffer-size)
           rdr (orc-read/reader (Path. src-path) conf)
           des (orc-read/schema rdr)
-          ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat (orc-read/batch des bat-size)]
+          ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat (orc-read/batch des bat-size)
+	  collect (core/collector coll-type)]
       (with-async-record-reader [rr (.rows rdr)]
         (info "Starting json streamer thread...")
         (try
@@ -64,13 +57,13 @@
 	  (async/>!! out (meta des bat))
           (let [hdr (col-headers bat)
                 hdr-chunk (format "[%s" (json/write-str hdr))
-                first-chunk (jsonify (core/rows->maps (col-handlers bat) bat))]
+                first-chunk (jsonify (collect (col-handlers bat) bat))]
             (loop [i 1
                    total (.count bat)
 	           byte-total (+ (byte-count hdr-chunk) (byte-count first-chunk))
                    acc (if (= "" first-chunk) [hdr-chunk] [hdr-chunk first-chunk])]
               (if (.nextBatch rr bat)
-                (let [maps (core/rows->maps (col-handlers bat) bat)
+                (let [maps (collect (col-handlers bat) bat)
                       chunk (jsonify maps)
 	              n (+ (byte-count chunk) byte-total)]
 	          (if (< n byte-limit)
@@ -88,7 +81,9 @@
 	  (finally
 	    (info "Thread finished."))))
       out))
-  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit]
-    (start conf src-path col-headers col-handlers byte-limit orc-read/batch-size default-meta))
+  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size coll-type]
+    (start conf src-path col-headers col-handlers byte-limit bat-size coll-type default-meta))
   ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size]
-    (start conf src-path col-headers col-handlers byte-limit bat-size default-meta)))
+    (start conf src-path col-headers col-handlers byte-limit bat-size :vector default-meta))
+  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit]
+    (start conf src-path col-headers col-handlers byte-limit orc-read/batch-size :vector default-meta)))

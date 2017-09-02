@@ -14,7 +14,7 @@
 
 (orc-core/configure-logging :std-err)
 
-(deftest simple-json-test
+(deftest test-json->map
   (with-tmp-workspace [ws "test-1"]
     (let [src (str ws "/test.orc")
           ^TypeDescription sch (orc-fixture/schema "struct<x:int,y:int>")
@@ -28,10 +28,9 @@
 	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
           ch (orc-json/start (orc-read/configure)
                              (URI. src)
-                             (partial orc-fixture/column-headers fields)
+                             (partial orc-fixture/column-headers fields :map)
                              (partial orc-fixture/column-handlers fields)
-                             25
-                             2)]
+                             25 2 :map)]
       (testing "translate ORC to json repr: multiple chunks"
         (is (= (async/<!! ch) "JSON Stream"))
         (is (= (async/<!! ch) {:i 1, :chunk "[{\"0\":\"f1\",\"1\":\"f2\"},{\"0\":0,\"1\":0},{\"0\":1,\"1\":2},{\"0\":2,\"1\":4},{\"0\":3,\"1\":6}"}))
@@ -52,10 +51,9 @@
 	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
           ch (orc-json/start (orc-read/configure)
                              (URI. src)
-                             (partial orc-fixture/column-headers fields)
+                             (partial orc-fixture/column-headers fields :map)
                              (partial orc-fixture/column-handlers fields)
-                             25
-                             2)]
+                             25 2 :map)]
       (testing "translate ORC to json repr: one chunk"
         (is (= (async/<!! ch) "JSON Stream"))
         (is (= (async/<!! ch) {:i 1, :chunk "[{\"0\":\"f1\",\"1\":\"f2\"},{\"0\":0,\"1\":0},{\"0\":1,\"1\":2}]"}))
@@ -74,11 +72,9 @@
 	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
           ch (orc-json/start (orc-read/configure)
                              (URI. src)
-                             (partial orc-fixture/column-headers fields)
+                             (partial orc-fixture/column-headers fields :map)
                              (partial orc-fixture/column-handlers fields)
-                             25
-                             2
-			     meta)]
+                             25 2 :map meta)]
       (testing "translate ORC to json repr: custom meta function"
         (is (= (async/<!! ch) "2 Columns"))
         (is (= (async/<!! ch) {:i 1, :chunk "[{\"0\":\"f1\",\"1\":\"f2\"},{\"0\":0,\"1\":0},{\"0\":1,\"1\":2}]"}))
@@ -94,11 +90,94 @@
           _ (orc-fixture/write wtr bat 0)
           ch (orc-json/start (orc-read/configure)
                              (URI. src)
-                             (partial orc-fixture/column-headers fields)
+                             (partial orc-fixture/column-headers fields :map)
                              (partial orc-fixture/column-handlers fields)
-                             25
-                             2)]
+                             25 2 :map)]
       (testing "translate ORC to json repr: empty json"
         (is (= (async/<!! ch) "JSON Stream"))
         (is (= (async/<!! ch) {:i 1, :chunk "[{\"0\":\"f1\",\"1\":\"f2\"}]"}))
+        (is (= (async/<!! ch) nil))))))
+
+
+(deftest test-json->vector
+  (with-tmp-workspace [ws "test-1"]
+    (let [src (str ws "/test.orc")
+          ^TypeDescription sch (orc-fixture/schema "struct<x:int,y:int>")
+          ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
+          ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
+          fields (list
+            {:name "f1" :type "int"}
+            {:name "f2" :type "int"})
+          _ (orc-fixture/write wtr bat 10
+	      [(.vector (aget (.cols bat) 0)) identity]
+	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
+          ch (orc-json/start (orc-read/configure)
+                             (URI. src)
+                             (partial orc-fixture/column-headers fields :vector)
+                             (partial orc-fixture/column-handlers fields)
+                             25 2 :vector)]
+      (testing "translate ORC to json repr: multiple chunks"
+        (is (= (async/<!! ch) "JSON Stream"))
+        (is (= (async/<!! ch) {:i 1, :chunk "[[\"f1\",\"f2\"],[0,0],[1,2],[2,4],[3,6]"}))
+        (is (= (async/<!! ch) {:i 2, :chunk ",[4,8],[5,10],[6,12],[7,14]"}))
+        (is (= (async/<!! ch) {:i 3, :chunk ",[8,16],[9,18]]"}))
+        (is (= (async/<!! ch) nil)))))
+  (with-tmp-workspace [ws "test-2"]
+    (let [src (str ws "/test.orc")
+          ^TypeDescription sch (orc-fixture/schema "struct<x:int,y:int>")
+          ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
+          ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
+          fields (list
+            {:name "f1" :type "int"}
+            {:name "f2" :type "int"})
+          _ (orc-fixture/write wtr bat 2
+	      [(.vector (aget (.cols bat) 0)) identity]
+	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
+          ch (orc-json/start (orc-read/configure)
+                             (URI. src)
+                             (partial orc-fixture/column-headers fields :vector)
+                             (partial orc-fixture/column-handlers fields)
+                             25 2 :vector)]
+      (testing "translate ORC to json repr: one chunk"
+        (is (= (async/<!! ch) "JSON Stream"))
+        (is (= (async/<!! ch) {:i 1, :chunk "[[\"f1\",\"f2\"],[0,0],[1,2]]"}))
+        (is (= (async/<!! ch) nil)))))
+  (with-tmp-workspace [ws "test-3"]
+    (let [src (str ws "/test.orc")
+          ^TypeDescription sch (orc-fixture/schema "struct<x:int,y:int>")
+          ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
+          ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
+          meta #(format "%d Columns" (.numCols %2))
+          fields (list
+            {:name "f1" :type "int"}
+            {:name "f2" :type "int"})
+          _ (orc-fixture/write wtr bat 2
+	      [(.vector (aget (.cols bat) 0)) identity]
+	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
+          ch (orc-json/start (orc-read/configure)
+                             (URI. src)
+                             (partial orc-fixture/column-headers fields :vector)
+                             (partial orc-fixture/column-handlers fields)
+                             25 2 :vector meta)]
+      (testing "translate ORC to json repr: custom meta function"
+        (is (= (async/<!! ch) "2 Columns"))
+        (is (= (async/<!! ch) {:i 1, :chunk "[[\"f1\",\"f2\"],[0,0],[1,2]]"}))
+        (is (= (async/<!! ch) nil)))))
+  (with-tmp-workspace [ws "test-4"]
+    (let [src (str ws "/test.orc")
+          ^TypeDescription sch (orc-fixture/schema "struct<x:int,y:int>")
+          ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
+          ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
+          fields (list
+            {:name "f1" :type "int"}
+            {:name "f2" :type "int"})
+          _ (orc-fixture/write wtr bat 0)
+          ch (orc-json/start (orc-read/configure)
+                             (URI. src)
+                             (partial orc-fixture/column-headers fields :vector)
+                             (partial orc-fixture/column-handlers fields)
+                             25 2 :vector)]
+      (testing "translate ORC to json repr: empty json"
+        (is (= (async/<!! ch) "JSON Stream"))
+        (is (= (async/<!! ch) {:i 1, :chunk "[[\"f1\",\"f2\"]]"}))
         (is (= (async/<!! ch) nil))))))

@@ -4,15 +4,7 @@
             [clojure.core.async :as async]
 	    [orc.core :as core]
             [orc.macro :refer [with-async-record-reader]]
-            [taoensso.timbre :as timbre
-                             :refer [log
-                                     trace
-                                     debug
-                                     info
-                                     warn
-                                     error
-                                     fatal
-                                     report]])
+            [taoensso.timbre :as timbre :refer [log trace debug info warn error fatal report]])
   (import [org.apache.orc OrcFile]
           [org.apache.hadoop.fs Path]
           [org.apache.hadoop.conf Configuration])
@@ -64,11 +56,12 @@
     (batch sch batch-size)))
 
 (defn start
-  ([conf ^java.net.URI src-path col-headers col-handlers bat-size]
+  ([conf ^java.net.URI src-path col-headers col-handlers bat-size coll-type]
     (let [out (async/chan buffer-size)
           rdr (reader (Path. src-path) conf)
 	  des (schema rdr)
-          ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat (batch des bat-size)]
+          ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat (batch des bat-size)
+	  collect (core/collector coll-type)]
       (with-async-record-reader [rr (.rows rdr)]
         (info "Starting reader thread...")
         (try
@@ -77,12 +70,12 @@
 
           ;; Send first translated batch
           (async/>!! out (col-headers bat))
-          (async/>!! out {:i 1 :rows (core/rows->maps (col-handlers bat) bat)})
+          (async/>!! out {:i 1 :rows (collect (col-handlers bat) bat)})
 
           (loop [i 2
                  total (.count bat)]
             (if (.nextBatch rr bat)
-              (let [rows (core/rows->maps (col-handlers bat) bat)]
+              (let [rows (collect (col-handlers bat) bat)]
                 (if (async/>!! out {:i i :rows rows})
                   (recur (inc i) (+ total (.count bat)))
                   (warn "Channel is closed; cannot write.")))
@@ -95,5 +88,7 @@
 	  (finally
 	    (info "Thread finished."))))
       out))
+  ([conf ^java.net.URI src-path col-headers col-handlers bat-size]
+    (start conf src-path col-headers col-handlers bat-size :vector))
   ([conf ^java.net.URI src-path col-headers col-handlers]
-    (start conf src-path col-headers col-handlers batch-size)))
+    (start conf src-path col-headers col-handlers batch-size :vector)))

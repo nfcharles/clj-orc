@@ -21,30 +21,15 @@ responsible for data deserialization.  See example below:
   (:require [orc.col :as col])
   (:gen-class))
 
-
-;; Schema 1
 (def foo
   (list
-    {:name "field1" :type "string" }
-    {:name "field2" :type "int"    }
-    {:name "field3" :type "int"    }))
-
-;; Schema 2
-(def bar
-  (list
-    {:name "field1" :type "int"   }
-    {:name "field2" :type "string" }))
+    {:name "x" :type "int" }
+    {:name "y" :type "int" }))
 
 (defn column-handlers [^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
-  (case (.numCols bat)
-    3 (col/handlers foo) ; list of deser functions for each column
-    2 (col/handlers bar) ; list of deser functions for each column
-    (throw (java.lang.Exception "Unknown configuration"))))
+  (orc-col/handlers foo))
 
-(defn hdr-reducer [acc item]
-  (assoc acc (item 0) ((item 1) :name)))
-
-;; Header records are used for memory optimization.
+;; Header records are used for memory optimization when collection type is :map
 ;; Field names are mapped to their ordinal values.
 ;; e.g.
 ;; [
@@ -60,11 +45,18 @@ responsible for data deserialization.  See example below:
 ;;   }
 ;; ]
 ;;
-(defn column-headers [^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
-  (case (.numCols bat)
-    3 (reduce hdr-reducer {} (map vector (range 3) foo))
-    2 (reduce hdr-reducer {} (map vector (range 2) bar))
-    (throw (java.lang.Exception "Unknown configuration"))))
+
+(defn map-hdr-reducer [acc item]
+  (assoc acc (item 0) ((item 1) :name)))
+
+(defn vector-hdr-reducer [acc item]
+  (conj acc (item :name)))
+
+(defn column-headers [coll-type ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
+  (case coll-type
+    :map    (reduce map-hdr-reducer {} (map vector (range (count foo)) foo))
+    :vector (reduce vector-hdr-reducer [] foo)
+    (throw (java.lang.Exception. (format "Unsupported collection type: %s" coll-type)))))
 ```
 
 ### Hadoop
@@ -102,36 +94,38 @@ ORC.  The following example demonstrates configuring the reader for remote readi
 ```
 
 ### Multithreaded Processing
-#### Use orc read worker to concurrently read and process ORC data
+#### Use orc read worker to concurrently read and process ORC data (into clojure maps)
 ```clojure
 (ns examples.driver
   (:require [orc.read :as orc-read]
             [example.fields :as fields])
   (:gen-class))
 
-(let [ch (orc-read/start conf uri fields/column-headers fields/column-handlers batch-size)]
+;; start method coll-type parameter defaults to :vector
+(let [ch (orc-read/start conf uri (partial fields/column-headers :map) fields/column-handlers batch-size :map)]
   (loop [acc []]
-    (if-let [batch (async/<!! ch)]
+    (if-let [res (async/<!! ch)]
       (do
-        ;; where batch is list of hash-maps
+        ;; where result is list of hash-maps
         ;; [{'col_1' 'foo'
         ;;   'col_2' 'bar'
         ;;   'col_n' 'baz'},
         ;;  ...]
-        (conj acc (process batch))
+        (conj acc (process res))
         (recur))
       acc)))
 ```
 ```batch-size``` sets how many ORC records are batched into memory per iteration.
 
-#### Use orc json streamer to concurrently stream and process json chunks
+#### Use orc json streamer to concurrently stream and process json chunks (records are json lists)
 ```clojure
 (ns example.driver
   (:require [orc.json :as orc-json]
             [example.fields :as fields])
   (:gen-class))
 
-(let [ch (orc-json/start conf uri fields/column-headers fields/column-handlers byte-limit batch-size)]
+;; start method coll-type defaults to :vector
+(let [ch (orc-json/start conf uri (partial fields/column-headers :vector) fields/column-handlers byte-limit batch-size)]
   ;; First value from stream is stream metadata
   (println (async/<!! ch))
   (loop []
