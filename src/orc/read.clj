@@ -80,7 +80,7 @@
                   (recur (inc i) (+ total (.count bat)))
                   (warn "Channel is closed; cannot write.")))
               (do
-                (info (format "rows.count=%d" total))
+                (info (format "rows.count %d" total))
                 (async/close! out))))
           (catch Exception e
             (async/close! out)
