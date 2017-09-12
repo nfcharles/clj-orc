@@ -133,10 +133,14 @@ ORC.  The following example demonstrates configuring the reader for remote readi
       (let [ret (process chunk)]
         (recur)))))
 ```
-The last two arguments of the json streamer are optional.  ```byte-limit``` is the minimum number of bytes for each
-json chunk.  ```meta``` is a 2-arity function that takes ```TypeDescrition``` and ```VectorizedRowBatch``` objects as
-arguments. The return value is the first value in the output stream.  If no function is provided a default function
-will provide a default value.
+The last three arguments of the json streamer are optional.
+
+```batch-size``` sets how many ORC records are batched into memory per iteration.
+
+```coll-type``` can be either ```:vector``` or ```:map``` and determines the collection type of each json record.
+
+```meta``` is a 2-arity function that takes ```TypeDescrition``` and ```VectorizedRowBatch``` objects as arguments.
+The return value is the first value in the output stream. If no function is provided a default function will provide a default value.
 
 ## TODO
  * Exhaustive unit testing
