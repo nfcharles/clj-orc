@@ -35,7 +35,7 @@
      (try
        ~@body
        (finally
-         (println (format "Removing workspace %s" ~(bindings 0)))
+         ;(println (format "Removing workspace %s" ~(bindings 0)))
          (rm-files (io/file ~(bindings 0)))))))
 
 (defmacro with-async-record-reader [bindings & body]

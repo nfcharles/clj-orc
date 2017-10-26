@@ -9,11 +9,16 @@
    :locale   :jvm-default #_(java.util.Locale. "en")
    :timezone :utc})
 
-(defn configure-logging [stream]
-  (logging/merge-config!
-    { :timestamp-opts timestamp-opts
-      :appenders {
-      :println (appenders/println-appender {:stream stream})}}))
+(defn configure-logging
+  ([stream level blacklist]
+    (logging/merge-config!
+      { :level level
+        :timestamp-opts timestamp-opts
+        :ns-blacklist blacklist
+        :appenders {
+        :println (appenders/println-appender {:stream stream})}}))
+  ([stream level]
+    (configure-logging stream level [])))
 
 (defn get-col [^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat n]
   (nth (.cols bat) n))

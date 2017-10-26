@@ -12,7 +12,7 @@
           [org.apache.hadoop.hive.ql.exec.vector VectorizedRowBatch]))
 
 
-(orc-core/configure-logging :std-err)
+(orc-core/configure-logging :std-err :info ["orc.*"])
 
 (deftest test-json->map
   (with-tmp-workspace [ws "test-1"]
@@ -30,7 +30,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :map)
                              (partial orc-fixture/column-handlers fields)
-                             25 2 :map)]
+                             25 2 10 :map)]
       (testing "translate ORC to json repr: multiple chunks"
         (is (= (async/<!! ch) "JSON Stream"))
         (is (= (async/<!! ch) {:i 1, :chunk "[{\"0\":\"f1\",\"1\":\"f2\"},{\"0\":0,\"1\":0},{\"0\":1,\"1\":2},{\"0\":2,\"1\":4},{\"0\":3,\"1\":6}"}))
@@ -53,7 +53,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :map)
                              (partial orc-fixture/column-handlers fields)
-                             25 2 :map)]
+                             25 2 10 :map)]
       (testing "translate ORC to json repr: one chunk"
         (is (= (async/<!! ch) "JSON Stream"))
         (is (= (async/<!! ch) {:i 1, :chunk "[{\"0\":\"f1\",\"1\":\"f2\"},{\"0\":0,\"1\":0},{\"0\":1,\"1\":2}]"}))
@@ -74,7 +74,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :map)
                              (partial orc-fixture/column-handlers fields)
-                             25 2 :map meta)]
+                             25 2 10 :map meta)]
       (testing "translate ORC to json repr: custom meta function"
         (is (= (async/<!! ch) "2 Columns"))
         (is (= (async/<!! ch) {:i 1, :chunk "[{\"0\":\"f1\",\"1\":\"f2\"},{\"0\":0,\"1\":0},{\"0\":1,\"1\":2}]"}))
@@ -92,7 +92,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :map)
                              (partial orc-fixture/column-handlers fields)
-                             25 2 :map)]
+                             25 2 10 :map)]
       (testing "translate ORC to json repr: empty json"
         (is (= (async/<!! ch) "JSON Stream"))
         (is (= (async/<!! ch) {:i 1, :chunk "[{\"0\":\"f1\",\"1\":\"f2\"}]"}))
@@ -115,7 +115,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :vector)
                              (partial orc-fixture/column-handlers fields)
-                             25 2 :vector)]
+                             25 2 10 :vector)]
       (testing "translate ORC to json repr: multiple chunks"
         (is (= (async/<!! ch) "JSON Stream"))
         (is (= (async/<!! ch) {:i 1, :chunk "[[\"f1\",\"f2\"],[0,0],[1,2],[2,4],[3,6]"}))
@@ -137,7 +137,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :vector)
                              (partial orc-fixture/column-handlers fields)
-                             25 2 :vector)]
+                             25 2 10 :vector)]
       (testing "translate ORC to json repr: one chunk"
         (is (= (async/<!! ch) "JSON Stream"))
         (is (= (async/<!! ch) {:i 1, :chunk "[[\"f1\",\"f2\"],[0,0],[1,2]]"}))
@@ -158,7 +158,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :vector)
                              (partial orc-fixture/column-handlers fields)
-                             25 2 :vector meta)]
+                             25 2 10 :vector meta)]
       (testing "translate ORC to json repr: custom meta function"
         (is (= (async/<!! ch) "2 Columns"))
         (is (= (async/<!! ch) {:i 1, :chunk "[[\"f1\",\"f2\"],[0,0],[1,2]]"}))
@@ -176,7 +176,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :vector)
                              (partial orc-fixture/column-handlers fields)
-                             25 2 :vector)]
+                             25 2 10 :vector)]
       (testing "translate ORC to json repr: empty json"
         (is (= (async/<!! ch) "JSON Stream"))
         (is (= (async/<!! ch) {:i 1, :chunk "[[\"f1\",\"f2\"]]"}))

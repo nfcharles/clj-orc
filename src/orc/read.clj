@@ -11,11 +11,15 @@
   (:gen-class))
 
 
-(def buffer-size 100)
-
 (def batch-size 1024)
 
-(def default-mapping
+(def buffer-size 100)
+
+(defn stream-metadata [^org.apache.orc.TypeDescription des
+                       ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
+  "Read Stream")
+
+(def configuration-mapping
   (hash-map
     "fs.file.impl" {:value "org.apache.hadoop.fs.LocalFileSystem"}))
 
@@ -41,7 +45,7 @@
           (.set conf k value)))
       conf))
    ([]
-     (configure default-mapping)))
+     (configure configuration-mapping)))
 
 (defn reader ^org.apache.orc.Reader [path conf]
   (OrcFile/createReader path (OrcFile/readerOptions conf)))
@@ -56,39 +60,53 @@
     (batch sch batch-size)))
 
 (defn start
-  ([conf ^java.net.URI src-path col-headers col-handlers bat-size coll-type]
-    (let [out (async/chan buffer-size)
+  ([conf ^java.net.URI src-path col-headers col-handlers bat-size buf-size coll-type meta]
+    (debug (format "BATCH_SIZE=%d" bat-size))
+    (debug (format "BUFFER_SIZE=%d" buf-size))
+    (debug (format "COLLECTION_TYPE=%s" coll-type))
+    (let [out-ch (async/chan buf-size)
           rdr (reader (Path. src-path) conf)
-	  des (schema rdr)
+          des (schema rdr)
           ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat (batch des bat-size)
 	  collect (core/collector coll-type)]
       (with-async-record-reader [rr (.rows rdr)]
         (info "Starting reader thread...")
         (try
           ;; First batch is special case. Get initial value for header construction
+          (debug "Reading batch 1")
           (.nextBatch rr bat)
 
+	  ;; Send stream metadata
+          (debug "Sending stream metadata")
+          (async/>!! out-ch (meta des bat))
+
           ;; Send first translated batch
-          (async/>!! out (col-headers bat))
-          (async/>!! out {:i 1 :rows (collect (col-handlers bat) bat)})
+          (debug "Sending stream header")
+          (async/>!! out-ch (col-headers bat))
+          (async/>!! out-ch {:i 1 :rows (collect (col-handlers bat) bat)})
 
           (loop [i 2
                  total (.count bat)]
+            (debug (format "Reading batch %d" i))
             (if (.nextBatch rr bat)
               (let [rows (collect (col-handlers bat) bat)]
-                (if (async/>!! out {:i i :rows rows})
+                (if (async/>!! out-ch {:i i :rows rows})
                   (recur (inc i) (+ total (.count bat)))
                   (warn "Channel is closed; cannot write.")))
               (do
                 (info (format "rows.count %d" total))
-                (async/close! out))))
+                (async/close! out-ch))))
           (catch Exception e
-            (async/close! out)
+            (async/close! out-ch)
             (throw e))
 	  (finally
 	    (info "Thread finished."))))
-      out))
+      out-ch))
+  ([conf ^java.net.URI src-path col-headers col-handlers bat-size buf-size coll-type]
+    (start conf src-path col-headers col-handlers bat-size buf-size coll-type stream-metadata))
+  ([conf ^java.net.URI src-path col-headers col-handlers bat-size buf-size]
+    (start conf src-path col-headers col-handlers bat-size buf-size :vector stream-metadata))
   ([conf ^java.net.URI src-path col-headers col-handlers bat-size]
-    (start conf src-path col-headers col-handlers bat-size :vector))
+    (start conf src-path col-headers col-handlers bat-size buffer-size :vector stream-metadata))
   ([conf ^java.net.URI src-path col-headers col-handlers]
-    (start conf src-path col-headers col-handlers batch-size :vector)))
+    (start conf src-path col-headers col-handlers batch-size buffer-size :vector stream-metadata)))

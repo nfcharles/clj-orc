@@ -12,8 +12,8 @@
 
 (def buffer-size 100)
 
-(defn default-meta [^org.apache.orc.TypeDescription des
-                    ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
+(defn stream-metadata [^org.apache.orc.TypeDescription des
+                       ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
   "JSON Stream")
 
 (defn jsonify [coll]
@@ -40,8 +40,11 @@
   {:i i :chunk s})
 
 (defn start
-  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size coll-type meta]
-    (let [out (async/chan buffer-size)
+  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size buf-size coll-type meta]
+    (debug (format "BATCH_SIZE=%d" bat-size))
+    (debug (format "BUFFER_SIZE=%d" buf-size))
+    (debug (format "COLLECTION_TYPE=%s" coll-type))
+    (let [out-ch (async/chan buf-size)
           rdr (orc-read/reader (Path. src-path) conf)
           des (orc-read/schema rdr)
           ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat (orc-read/batch des bat-size)
@@ -51,39 +54,45 @@
         (try
           ;; First batch is special case. Get initial value for metadata
           ;; and header construction
+          (debug "Reading batch 1")
           (.nextBatch rr bat)
 
 	  ;; Send stream metadata
-	  (async/>!! out (meta des bat))
-          (let [hdr (col-headers bat)
-                hdr-chunk (format "[%s" (json/write-str hdr))
+          (debug "Sending stream metadata")
+          (async/>!! out-ch (meta des bat))
+
+          (let [hdr-chunk (format "[%s" (json/write-str (col-headers bat)))
                 first-chunk (jsonify (collect (col-handlers bat) bat))]
             (loop [i 1
+                   j 2
                    total (.count bat)
-	           byte-total (+ (byte-count hdr-chunk) (byte-count first-chunk))
+                   byte-total (+ (byte-count hdr-chunk) (byte-count first-chunk))
                    acc (if (= "" first-chunk) [hdr-chunk] [hdr-chunk first-chunk])]
+              (debug (format "Reading batch %d" j))
               (if (.nextBatch rr bat)
                 (let [maps (collect (col-handlers bat) bat)
                       chunk (jsonify maps)
-	              n (+ (byte-count chunk) byte-total)]
+                      n (+ (byte-count chunk) byte-total)]
 	          (if (< n byte-limit)
-                    (recur i (+ total (.count bat)) n (conj acc chunk))
-                    (if (async/>!! out (payload i (prep i (conj acc chunk))))
-                      (recur (inc i) (+ total (.count bat)) 0 [])
+                    (recur i (inc j) (+ total (.count bat)) n (conj acc chunk))
+                    (if (async/>!! out-ch (payload i (prep i (conj acc chunk))))
+                      (recur (inc i) (inc j) (+ total (.count bat)) 0 [])
                       (warn "Channel is closed; cannot write."))))
                 (do
-		  (info (format "rows.count %d" total))
-                  (async/>!! out (payload i (prep i acc "]")))
-                  (async/close! out)))))
+                  (info (format "rows.count %d" total))
+                  (async/>!! out-ch (payload i (prep i acc "]")))
+                  (async/close! out-ch)))))
           (catch Exception e
-            (async/close! out)
+            (async/close! out-ch)
             (throw e))
 	  (finally
 	    (info "Thread finished."))))
-      out))
-  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size coll-type]
-    (start conf src-path col-headers col-handlers byte-limit bat-size coll-type default-meta))
+      out-ch))
+  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size buf-size coll-type]
+    (start conf src-path col-headers col-handlers byte-limit bat-size buf-size coll-type stream-metadata))
+  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size buf-size]
+    (start conf src-path col-headers col-handlers byte-limit bat-size buf-size :vector stream-metadata))
   ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size]
-    (start conf src-path col-headers col-handlers byte-limit bat-size :vector default-meta))
+    (start conf src-path col-headers col-handlers byte-limit bat-size buffer-size :vector stream-metadata))
   ([conf ^java.net.URI src-path col-headers col-handlers byte-limit]
-    (start conf src-path col-headers col-handlers byte-limit orc-read/batch-size :vector default-meta)))
+    (start conf src-path col-headers col-handlers byte-limit orc-read/batch-size buffer-size :vector stream-metadata)))
