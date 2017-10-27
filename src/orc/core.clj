@@ -32,7 +32,7 @@
          col-conf col-config
          rcrd (transient {})]
     (if-let [conf (first col-conf)]
-      (let [val (value (conf :fn) bat col-n row-n)]
+      (let [val (value (:fn conf) bat col-n row-n)]
         (recur (inc col-n) (rest col-conf) (assoc! rcrd col-n val)))
       (persistent! rcrd))))
 
@@ -41,7 +41,7 @@
          col-conf col-config
          rcrd (transient [])]
     (if-let [conf (first col-conf)]
-      (let [val (value (conf :fn) bat col-n row-n)]
+      (let [val (value (:fn conf) bat col-n row-n)]
         (recur (inc col-n) (rest col-conf) (conj! rcrd val)))
       (persistent! rcrd))))
 

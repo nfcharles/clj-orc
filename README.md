@@ -1,6 +1,6 @@
 # clj-orc
 
-clj-orc is a library for translating ORC files into json.
+clj-orc is a library for translating ORC files into json represenation.
 
 ## Installation
 
@@ -29,20 +29,28 @@ responsible for data deserialization.  See example below:
 (defn column-handlers [^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
   (orc-col/handlers foo))
 
-;; Header records are used for memory optimization when collection type is :map
-;; Field names are mapped to their ordinal values.
+;; Header records are used for memory optimization.  :map collection types use ordinal
+;; values mapped to their corresponding field names.
 ;; e.g.
 ;; [
 ;;   {
 ;;     "0" : "field1",
 ;;     "1" : "field2",
-;;     "3" : "field3"
+;;     "2" : "field3"
 ;;   },
 ;;   {
 ;;     "0" : "value1",
 ;;     "1" : "value2",
 ;;     "2" : "value3"
 ;;   }
+;; ]
+;;
+;; :vector collection type header records are a list of column names
+;; e.g.
+;;
+;; [
+;;  [ "field1", "field2", "field3"],
+;;  [ "value1", "value2", "value3"]
 ;; ]
 ;;
 
@@ -102,7 +110,7 @@ ORC.  The following example demonstrates configuring the reader for remote readi
   (:gen-class))
 
 ;; start method coll-type parameter defaults to :vector
-(let [ch (orc-read/start conf uri (partial fields/column-headers :map) fields/column-handlers batch-size :map)]
+(let [ch (orc-read/start conf uri (partial fields/column-headers :map) fields/column-handlers batch-size buffer-size :map)]
   (loop [acc []]
     (if-let [res (async/<!! ch)]
       (do
@@ -115,7 +123,15 @@ ORC.  The following example demonstrates configuring the reader for remote readi
         (recur))
       acc)))
 ```
-```batch-size``` sets how many ORC records are batched into memory per iteration.
+
+```batch-size``` sets number of rows per ORC batch.
+
+```buffer-size``` sets number of ORC batches queued into memory.
+
+```coll-type``` can be either ```:vector``` or ```:map``` and determines the collection type of each json record.
+
+```meta``` is a 2-arity function that takes ```TypeDescrition``` and ```VectorizedRowBatch``` objects as arguments.
+The return value is the first value in the output stream. If no function is provided a default function will provide a default value.
 
 #### Use orc json streamer to concurrently stream and process json chunks (records are json lists)
 ```clojure
@@ -133,9 +149,11 @@ ORC.  The following example demonstrates configuring the reader for remote readi
       (let [ret (process chunk)]
         (recur)))))
 ```
-The last three arguments of the json streamer are optional.
+The last four arguments of the json streamer are optional.
 
-```batch-size``` sets how many ORC records are batched into memory per iteration.
+```batch-size``` sets number of rows per ORC batch.
+
+```buffer-size``` sets number of ORC batches queued into memory.
 
 ```coll-type``` can be either ```:vector``` or ```:map``` and determines the collection type of each json record.
 
@@ -143,8 +161,7 @@ The last three arguments of the json streamer are optional.
 The return value is the first value in the output stream. If no function is provided a default function will provide a default value.
 
 ## TODO
- * Exhaustive unit testing
- * Complex type deserializers
+ * Complex type deserializers (with appropriate unit tests)
 
 ## License
 

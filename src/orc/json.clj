@@ -5,7 +5,7 @@
 	    [orc.core :as core]
 	    [orc.read :as orc-read]
             [orc.macro :refer [with-async-record-reader]]
-            [taoensso.timbre :as timbre :refer [log trace debug info warn error fatal report]])
+            [taoensso.timbre :as timbre :refer [log trace debug info warn error fatal infof debugf]])
   (import [org.apache.hadoop.fs Path])
   (:gen-class))
 
@@ -39,11 +39,12 @@
 (defn payload [i s]
   {:i i :chunk s})
 
+;; TODO: use :keyword args for optional args
 (defn start
   ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size buf-size coll-type meta]
-    (debug (format "BATCH_SIZE=%d" bat-size))
-    (debug (format "BUFFER_SIZE=%d" buf-size))
-    (debug (format "COLLECTION_TYPE=%s" coll-type))
+    (debugf "BATCH_SIZE=%d" bat-size)
+    (debugf "BUFFER_SIZE=%d" buf-size)
+    (debugf "COLLECTION_TYPE=%s" coll-type)
     (let [out-ch (async/chan buf-size)
           rdr (orc-read/reader (Path. src-path) conf)
           des (orc-read/schema rdr)
@@ -68,7 +69,7 @@
                    total (.count bat)
                    byte-total (+ (byte-count hdr-chunk) (byte-count first-chunk))
                    acc (if (= "" first-chunk) [hdr-chunk] [hdr-chunk first-chunk])]
-              (debug (format "Reading batch %d" j))
+              (debugf "Reading batch %d" j)
               (if (.nextBatch rr bat)
                 (let [maps (collect (col-handlers bat) bat)
                       chunk (jsonify maps)
@@ -79,7 +80,7 @@
                       (recur (inc i) (inc j) (+ total (.count bat)) 0 [])
                       (warn "Channel is closed; cannot write."))))
                 (do
-                  (info (format "rows.count %d" total))
+                  (infof "rows.count %d" total)
                   (async/>!! out-ch (payload i (prep i acc "]")))
                   (async/close! out-ch)))))
           (catch Exception e

@@ -4,7 +4,7 @@
             [clojure.core.async :as async]
 	    [orc.core :as core]
             [orc.macro :refer [with-async-record-reader]]
-            [taoensso.timbre :as timbre :refer [log trace debug info warn error fatal report]])
+            [taoensso.timbre :as timbre :refer [log trace debug info warn error fatal infof debugf]])
   (import [org.apache.orc OrcFile]
           [org.apache.hadoop.fs Path]
           [org.apache.hadoop.conf Configuration])
@@ -37,11 +37,11 @@
     (let [conf (Configuration.)]
       (info "*** Configuration ***")
       (doseq [[k v] mapping]
-        (let [type_ (v :type)
-	      value (v :value)]
+        (let [type_ (:type v)
+              value (:value v)]
           (if (= type_ :private)
-            (info (format "%s=%s" k (apply str (repeat (count value) "*"))))
-            (info (format "%s=%s" k value)))
+            (infof "%s=%s" k (apply str (repeat (count value) "*")))
+            (infof "%s=%s" k value))
           (.set conf k value)))
       conf))
    ([]
@@ -59,11 +59,12 @@
   ([^org.apache.orc.TypeDescription sch]
     (batch sch batch-size)))
 
+;; TODO: use :keyword args for optional args
 (defn start
   ([conf ^java.net.URI src-path col-headers col-handlers bat-size buf-size coll-type meta]
-    (debug (format "BATCH_SIZE=%d" bat-size))
-    (debug (format "BUFFER_SIZE=%d" buf-size))
-    (debug (format "COLLECTION_TYPE=%s" coll-type))
+    (debugf "BATCH_SIZE=%d" bat-size)
+    (debugf "BUFFER_SIZE=%d" buf-size)
+    (debugf "COLLECTION_TYPE=%s" coll-type)
     (let [out-ch (async/chan buf-size)
           rdr (reader (Path. src-path) conf)
           des (schema rdr)
@@ -87,14 +88,14 @@
 
           (loop [i 2
                  total (.count bat)]
-            (debug (format "Reading batch %d" i))
+            (debugf "Reading batch %d" i)
             (if (.nextBatch rr bat)
               (let [rows (collect (col-handlers bat) bat)]
                 (if (async/>!! out-ch {:i i :rows rows})
                   (recur (inc i) (+ total (.count bat)))
                   (warn "Channel is closed; cannot write.")))
               (do
-                (info (format "rows.count %d" total))
+                (infof "rows.count %d" total)
                 (async/close! out-ch))))
           (catch Exception e
             (async/close! out-ch)

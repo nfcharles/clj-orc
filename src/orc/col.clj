@@ -74,7 +74,7 @@
   (loop [types col-types
          acc []]
     (if-let [col-type (first types)]
-      (if-let [handler (type-mapper (col-type :type))]
-        (recur (rest types) (accum acc (col-type :name) handler))
-	(recur (rest types) (accum acc (col-type :name) default)))
+      (if-let [handler (type-mapper (:type col-type))]
+        (recur (rest types) (accum acc (:name col-type) handler))
+        (recur (rest types) (accum acc (:name col-type) default)))
       acc)))
