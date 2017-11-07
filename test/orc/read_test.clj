@@ -29,7 +29,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :map)
                              (partial orc-fixture/column-handlers fields)
-                             4 10 :map)]
+                             :bat-size 4 :buf-size 10 :coll-type :map)]
       (testing "translate ORC to native clj repr: batch size 4"
         (is (= (async/<!! ch) "Read Stream"))
         (is (= (async/<!! ch) {0 "f1", 1 "f2"}))
@@ -52,7 +52,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :map)
                              (partial orc-fixture/column-handlers fields)
-                             5 10 :map)]
+                             :bat-size 5 :buf-size 10 :coll-type :map)]
       (testing "translate ORC to native clj repr: batch size 5"
         (is (= (async/<!! ch) "Read Stream"))
         (is (= (async/<!! ch) {0 "f1", 1 "f2"}))
@@ -74,7 +74,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :map)
                              (partial orc-fixture/column-handlers fields)
-                             5 10 :map)]
+                             :bat-size 5 :buf-size 10 :coll-type :map)]
       (testing "translate ORC to native clj repr: 1 batch"
         (is (= (async/<!! ch) "Read Stream"))
         (is (= (async/<!! ch) {0 "f1", 1 "f2"}))
@@ -93,7 +93,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :map)
                              (partial orc-fixture/column-handlers fields)
-                             5 10 :map)]
+                             :bat-size 5 :buf-size 10 :coll-type :map)]
       (testing "translate ORC to native clj repr: empty batch"
         (is (= (async/<!! ch) "Read Stream"))
         (is (= (async/<!! ch) {0 "f1", 1 "f2"}))
@@ -117,7 +117,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :vector)
                              (partial orc-fixture/column-handlers fields)
-                             4)]
+                             :bat-size 4)]
       (testing "translate ORC to native clj repr: batch size 4"
         (is (= (async/<!! ch) "Read Stream"))
         (is (= (async/<!! ch) ["f1" "f2"]))
@@ -140,7 +140,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :vector)
                              (partial orc-fixture/column-handlers fields)
-                             5)]
+                             :bat-size 5)]
       (testing "translate ORC to native clj repr: batch size 5"
         (is (= (async/<!! ch) "Read Stream"))
         (is (= (async/<!! ch) ["f1" "f2"]))
@@ -162,7 +162,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :vector)
                              (partial orc-fixture/column-handlers fields)
-                             5)]
+                             :bat-size 5)]
       (testing "translate ORC to native clj repr: 1 batch"
         (is (= (async/<!! ch) "Read Stream"))
         (is (= (async/<!! ch) ["f1" "f2"]))
@@ -182,7 +182,7 @@
                              (URI. src)
                              (partial orc-fixture/column-headers fields :vector)
                              (partial orc-fixture/column-handlers fields)
-                             5 10 :vector meta)]
+                             :bat-size 5 :buf-size 10 :coll-type :vector :meta meta)]
       (testing "translate ORC to native clj repr: empty batch"
         (is (= (async/<!! ch) "2 Columns"))
         (is (= (async/<!! ch) ["f1" "f2"]))

@@ -10,8 +10,6 @@
   (:gen-class))
 
 
-(def buffer-size 100)
-
 (defn stream-metadata [^org.apache.orc.TypeDescription des
                        ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
   "JSON Stream")
@@ -39,9 +37,11 @@
 (defn payload [i s]
   {:i i :chunk s})
 
-;; TODO: use :keyword args for optional args
-(defn start
-  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size buf-size coll-type meta]
+(defn start [conf ^java.net.URI src-path col-headers col-handlers byte-limit & {:keys [bat-size buf-size coll-type meta]
+                                                                                :or {bat-size orc-read/batch-size
+                                                                                     buf-size orc-read/buffer-size
+                                                                                     coll-type :vector
+                                                                                     meta stream-metadata}}]
     (debugf "BATCH_SIZE=%d" bat-size)
     (debugf "BUFFER_SIZE=%d" buf-size)
     (debugf "COLLECTION_TYPE=%s" coll-type)
@@ -89,11 +89,3 @@
 	  (finally
 	    (info "Thread finished."))))
       out-ch))
-  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size buf-size coll-type]
-    (start conf src-path col-headers col-handlers byte-limit bat-size buf-size coll-type stream-metadata))
-  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size buf-size]
-    (start conf src-path col-headers col-handlers byte-limit bat-size buf-size :vector stream-metadata))
-  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit bat-size]
-    (start conf src-path col-headers col-handlers byte-limit bat-size buffer-size :vector stream-metadata))
-  ([conf ^java.net.URI src-path col-headers col-handlers byte-limit]
-    (start conf src-path col-headers col-handlers byte-limit orc-read/batch-size buffer-size :vector stream-metadata)))

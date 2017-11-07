@@ -59,9 +59,11 @@
   ([^org.apache.orc.TypeDescription sch]
     (batch sch batch-size)))
 
-;; TODO: use :keyword args for optional args
-(defn start
-  ([conf ^java.net.URI src-path col-headers col-handlers bat-size buf-size coll-type meta]
+(defn start [conf ^java.net.URI src-path col-headers col-handlers & {:keys [bat-size buf-size coll-type meta]
+                                                                     :or {bat-size batch-size
+                                                                          buf-size buffer-size
+                                                                          coll-type :vector
+                                                                          meta stream-metadata}}]
     (debugf "BATCH_SIZE=%d" bat-size)
     (debugf "BUFFER_SIZE=%d" buf-size)
     (debugf "COLLECTION_TYPE=%s" coll-type)
@@ -103,11 +105,3 @@
 	  (finally
 	    (info "Thread finished."))))
       out-ch))
-  ([conf ^java.net.URI src-path col-headers col-handlers bat-size buf-size coll-type]
-    (start conf src-path col-headers col-handlers bat-size buf-size coll-type stream-metadata))
-  ([conf ^java.net.URI src-path col-headers col-handlers bat-size buf-size]
-    (start conf src-path col-headers col-handlers bat-size buf-size :vector stream-metadata))
-  ([conf ^java.net.URI src-path col-headers col-handlers bat-size]
-    (start conf src-path col-headers col-handlers bat-size buffer-size :vector stream-metadata))
-  ([conf ^java.net.URI src-path col-headers col-handlers]
-    (start conf src-path col-headers col-handlers batch-size buffer-size :vector stream-metadata)))

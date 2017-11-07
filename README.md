@@ -26,7 +26,7 @@ responsible for data deserialization.  See example below:
     {:name "x" :type "int" }
     {:name "y" :type "int" }))
 
-(defn column-handlers [^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
+(defn col-handlers [^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
   (orc-col/handlers foo))
 
 ;; Header records are used for memory optimization.  :map collection types use ordinal
@@ -54,16 +54,16 @@ responsible for data deserialization.  See example below:
 ;; ]
 ;;
 
-(defn map-hdr-reducer [acc item]
+(defn map-reducer [acc item]
   (assoc acc (item 0) ((item 1) :name)))
 
-(defn vector-hdr-reducer [acc item]
+(defn vector-reducer [acc item]
   (conj acc (item :name)))
 
-(defn column-headers [coll-type ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
+(defn col-headers [coll-type ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
   (case coll-type
-    :map    (reduce map-hdr-reducer {} (map vector (range (count foo)) foo))
-    :vector (reduce vector-hdr-reducer [] foo)
+    :map    (reduce map-reducer {} (map vector (range (count foo)) foo))
+    :vector (reduce vector-reducer [] foo)
     (throw (java.lang.Exception. (format "Unsupported collection type: %s" coll-type)))))
 ```
 
@@ -106,11 +106,16 @@ ORC.  The following example demonstrates configuring the reader for remote readi
 ```clojure
 (ns examples.driver
   (:require [orc.read :as orc-read]
-            [example.fields :as fields])
+            [example.fields :as flds])
   (:gen-class))
 
 ;; start method coll-type parameter defaults to :vector
-(let [ch (orc-read/start conf uri (partial fields/column-headers :map) fields/column-handlers batch-size buffer-size :map)]
+(let [ch (orc-read/start conf uri (partial flds/col-headers :map) flds/col-handlers
+                         :bat-size batch-size
+                         :buf-size buffer-size
+                         :coll-type :map)]
+  ;; First value from stream is stream metadata
+  (println (async/<!! ch))			 
   (loop [acc []]
     (if-let [res (async/<!! ch)]
       (do
@@ -123,25 +128,27 @@ ORC.  The following example demonstrates configuring the reader for remote readi
         (recur))
       acc)))
 ```
+The last four parameters of the read streamer are optional keyword arguments.
 
-```batch-size``` sets number of rows per ORC batch.
+```:bat-size``` sets number of rows per ORC batch.
 
-```buffer-size``` sets number of ORC batches queued into memory.
+```:buf-size``` sets number of ORC batches queued into memory.
 
-```coll-type``` can be either ```:vector``` or ```:map``` and determines the collection type of each json record.
+```:coll-type``` can be either ```:vector``` or ```:map``` and determines the collection type of each json record.
 
-```meta``` is a 2-arity function that takes ```TypeDescrition``` and ```VectorizedRowBatch``` objects as arguments.
+```:meta``` is a 2-arity function that takes ```TypeDescrition``` and ```VectorizedRowBatch``` objects as arguments.
 The return value is the first value in the output stream. If no function is provided a default function will provide a default value.
 
 #### Use orc json streamer to concurrently stream and process json chunks (records are json lists)
 ```clojure
 (ns example.driver
   (:require [orc.json :as orc-json]
-            [example.fields :as fields])
+            [example.fields :as flds])
   (:gen-class))
 
 ;; start method coll-type defaults to :vector
-(let [ch (orc-json/start conf uri (partial fields/column-headers :vector) fields/column-handlers byte-limit batch-size)]
+(let [ch (orc-json/start conf uri (partial flds/col-headers :vector) flds/col-handlers byte-limit
+                         :bat-size batch-size)]
   ;; First value from stream is stream metadata
   (println (async/<!! ch))
   (loop []
@@ -149,15 +156,15 @@ The return value is the first value in the output stream. If no function is prov
       (let [ret (process chunk)]
         (recur)))))
 ```
-The last four arguments of the json streamer are optional.
+The last four parameters of the json streamer are optional keyword arguments.
 
-```batch-size``` sets number of rows per ORC batch.
+```:bat-size``` sets number of rows per ORC batch.
 
-```buffer-size``` sets number of ORC batches queued into memory.
+```:buf-size``` sets number of ORC batches queued into memory.
 
-```coll-type``` can be either ```:vector``` or ```:map``` and determines the collection type of each json record.
+```:coll-type``` can be either ```:vector``` or ```:map``` and determines the collection type of each json record.
 
-```meta``` is a 2-arity function that takes ```TypeDescrition``` and ```VectorizedRowBatch``` objects as arguments.
+```:meta``` is a 2-arity function that takes ```TypeDescrition``` and ```VectorizedRowBatch``` objects as arguments.
 The return value is the first value in the output stream. If no function is provided a default function will provide a default value.
 
 ## TODO
