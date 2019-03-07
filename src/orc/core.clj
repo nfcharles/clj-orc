@@ -42,6 +42,7 @@
          rcrd (transient [])]
     (if-let [conf (first col-conf)]
       (let [val (value (:fn conf) bat col-n row-n)]
+        #_(println conf)
         (recur (inc col-n) (rest col-conf) (conj! rcrd val)))
       (persistent! rcrd))))
 
