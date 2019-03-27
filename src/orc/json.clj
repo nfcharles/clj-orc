@@ -3,22 +3,28 @@
             [clojure.java.io :as io]
             [clojure.core.async :as async]
 	    [orc.core :as core]
-	    [orc.read :as orc-read]
+	    [orc.read :as orc.read]
             [orc.macro :refer [with-async-record-reader]]
             [taoensso.timbre :as timbre :refer [log trace debug info warn error fatal infof debugf]])
   (import [org.apache.hadoop.fs Path])
   (:gen-class))
 
 
-(defn stream-metadata [^org.apache.orc.TypeDescription des
-                       ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
+(defn stream-metadata
+  "Returns generic stream metadata"
+  [^org.apache.orc.TypeDescription des
+   ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
   "JSON Stream")
 
-(defn jsonify [coll]
+(defn jsonify
+  "Json serialize input"
+  [coll]
   (let [s (json/write-str coll)]
     (subs s 1 (dec (count s)))))
 
-(defn byte-count [^java.lang.String s]
+(defn byte-count
+  "Returns byte count"
+  [^java.lang.String s]
   (count (.getBytes s)))
 
 (defn prep
@@ -34,21 +40,25 @@
   ([i xs]
     (prep i xs "")))
 
-(defn payload [i s]
+(defn payload
+  "Wrap payload"
+  [i s]
   {:i i :chunk s})
 
-(defn start [conf ^java.net.URI src-path col-headers col-handlers byte-limit & {:keys [bat-size buf-size coll-type meta]
-                                                                                :or {bat-size orc-read/batch-size
-                                                                                     buf-size orc-read/buffer-size
-                                                                                     coll-type :vector
-                                                                                     meta stream-metadata}}]
+(defn start
+  "Starts json streaming thread"
+  [conf ^java.net.URI src-path col-headers col-handlers byte-limit & {:keys [bat-size buf-size coll-type meta]
+                                                                      :or {bat-size orc.read/batch-size
+                                                                           buf-size orc.read/buffer-size
+                                                                           coll-type :vector
+                                                                           meta stream-metadata}}]
     (debugf "BATCH_SIZE=%d" bat-size)
     (debugf "BUFFER_SIZE=%d" buf-size)
     (debugf "COLLECTION_TYPE=%s" coll-type)
     (let [out-ch (async/chan buf-size)
-          rdr (orc-read/reader (Path. src-path) conf)
-          des (orc-read/schema rdr)
-          ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat (orc-read/batch des bat-size)
+          rdr (orc.read/reader (Path. src-path) conf)
+          des (orc.read/schema rdr)
+          ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat (orc.read/batch des bat-size)
 	  collect (core/collector coll-type)]
       (with-async-record-reader [rr (.rows rdr)]
         (info "Starting json streamer thread...")
