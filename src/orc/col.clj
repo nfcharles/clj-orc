@@ -104,14 +104,14 @@
 
    Input is list of maps defining column names and types.
    e.g.
-     {:name 'foo' :type :string }
-     {:name 'bar' :type :int    }
+     {:name 'foo' :type :string}
+     {:name 'bar' :type :int   }
 
    Returns list of column name / deserializer handlers keyed by
    :name and :fn respectively.
    e.g.
-     {:name 'foo'  :fn string  }
-     {:name 'bar'  :fn default }"
+     {:name 'foo'  :fn parse-string}
+     {:name 'bar'  :fn parse-int}"
   [col-types]
   (loop [types col-types
          acc []]

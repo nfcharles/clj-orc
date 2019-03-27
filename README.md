@@ -91,10 +91,14 @@ ORC.  The following example demonstrates configuring the reader for remote readi
 (def s3-resource-mapping
   (hash-map
     "fs.file.impl"      {:value "org.apache.hadoop.fs.s3a.S3AFileSystem"}
-    "fs.s3a.access.key" {:value akey :type :private }
-    "fs.s3a.secret.key" {:value skey :type :private }))
+    "fs.s3a.access.key" {:value akey :type :private}
+    "fs.s3a.secret.key" {:value skey :type :private}))
 
 (orc-read/configure s3-resource-mapping)
+
+;; set path to remote URI
+(def path (java.net.URI. "s3a://bucket/path/to/key"))
+
 ```
 ```:private``` configuration values are obfuscated during logging.
 
@@ -127,7 +131,11 @@ ORC.  The following example demonstrates configuring the reader for remote readi
                          :buf-size buffer-size
                          :coll-type :map)]
   ;; First value from stream is stream metadata
-  (println (async/<!! ch))			 
+  (println (async/<!! ch))
+
+  ;; Header record
+  (println (async/<!! ch))
+
   (loop [acc []]
     (if-let [res (async/<!! ch)]
       ;; where result is list of hash-maps
@@ -160,6 +168,10 @@ The return value is the first value in the output stream. If no function is prov
 (let [ch (orc.json/start conf uri (partial flds/col-headers :vector) flds/col-handlers byte-limit :bat-size batch-size)]
   ;; First value from stream is stream metadata
   (println (async/<!! ch))
+
+  ;; Header record
+  (println (async/<!! ch))
+
   (loop []
     (if-let [chunk (async/<!! ch)]
       (let [ret (process chunk)]
