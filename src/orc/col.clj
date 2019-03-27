@@ -84,11 +84,6 @@
   [fields ^ListColumnVector col row-n]
   (throw (java.lang.Exception. "parse-list not implememted!!")))
 
-(defn default
-  [^ColumnVector col row-n]
-  "Returns deserialized row value"
-  (nth (.vector col) row-n))
-
 (def deser
   (hash-map
     :boolean parse-boolean
@@ -123,5 +118,5 @@
     (if-let [col-type (first types)]
       (if-let [handler (deser (:type col-type))]
         (recur (rest types) (accum acc (:name col-type) (partial handler (:fields col-type))))
-        (recur (rest types) (accum acc (:name col-type) default)))
+        (throw (java.lang.Exception. (format "Unsupported column type: %s" col-type))))
       acc)))
