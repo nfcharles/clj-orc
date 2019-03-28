@@ -11,8 +11,8 @@
   {:name "bar" :type :int}))
 
 (def fields-handlers (vector
-  {:name "foo" :fn orc.col/parse-string}
-  {:name "bar" :fn orc.col/parse-int}))
+  {:name "foo" :fn orc.col/parse-bytes}
+  {:name "bar" :fn orc.col/parse-long}))
 
 (deftest col-test
   (testing "Translate type list to  type handlers"

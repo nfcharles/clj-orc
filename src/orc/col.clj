@@ -20,21 +20,26 @@
 ;;;   arg2: ColumnVector class
 ;;;   arg3: row number
 
-(defn parse-boolean
-  [fields ^LongColumnVector col row-n]
-  (nth (.vector col) row-n))
 
-(defn parse-string
+;; ==================
+;; -  Scalar Types  -
+;; ==================
+
+(defn parse-bytes
   "Returns deserialized row value."
   [fields ^BytesColumnVector col row-n]
   (.toString col row-n))
 
-(defn parse-float
-  [fields ^DoubleColumnVector col row-n]
-  (let [val (nth (.vector col) row-n)]
-    (if (Float/isNaN val)
-      nil
-      val)))
+(defn parse-long
+  [fields ^LongColumnVector col row-n]
+  (nth (.vector col) row-n))
+
+;; TODO: print date value
+(defn parse-long->date
+  [fields ^LongColumnVector col row-n]
+  (let [builder (java.lang.StringBuilder.)]
+    (.stringifyValue col builder row-n)
+    (.toString builder)))
 
 (defn parse-double
   [fields ^DoubleColumnVector col row-n]
@@ -43,13 +48,11 @@
       nil
       val)))
 
-(defn parse-int
-  [fields ^LongColumnVector col row-n]
-  (nth (.vector col) row-n))
 
-(defn parse-bigint
-  [fields ^LongColumnVector col row-n]
-  (nth (.vector col) row-n))
+;; ====================
+;; -  Compound Types  -
+;; ====================
+
 
 (defn parse-struct
   [fields ^StructColumnVector col row-n]
@@ -74,27 +77,80 @@
     (loop [i   offset
            acc {}]
       (if (< i limit)
-        (let []
-          ;; key cannot be complex, hence fields value is nil
-          (recur (inc i) (assoc acc (k-handler nil kcol i) (v-handler (:fields fields) vcol i))))
+        ;; key cannot be compound type, hence `fields` value is nil
+        (recur (inc i) (assoc acc (k-handler nil kcol i) (v-handler (:fields fields) vcol i)))
         acc))))
 
-;; TODO: implement
 (defn parse-list
   [fields ^ListColumnVector col row-n]
-  (throw (java.lang.Exception. "parse-list not implememted!!")))
+  (let [v-handler          ((:type fields) deser)
+        ^ColumnVector vcol (.child col)
+        ^int list-len      (nth (.lengths col) row-n)
+        ^int offset        (nth (.offsets col) row-n)
+        limit              (+ offset list-len)]
+    (loop [i offset
+           acc []]
+      (if (< i limit)
+        (recur (inc i) (conj acc (v-handler (:fields fields) vcol i)))
+        acc))))
+
+;;; Nested compound types example definitions
+;;;
+;;; (def example
+;;;   (list
+;;;     {:name "foo" :type :map
+;;;      :fields {:key :string :value :double}}
+;;;     {:name "bar" :type :map
+;;;      :fields {:key :string :value :struct
+;;;               :fields [{:name "k1" :type :int}
+;;;                        {:name "k2" :type :float}]}}
+;;;     {:name "baz" :type :array
+;;;      :fields {:type :int}}))
+;;;
+;;; (def example2
+;;;   (list
+;;;     {:name "foo" :type :array
+;;;      :fields {:type :int}}
+;;;     {:name "bar" :type :array
+;;;      :fields {:type :map
+;;;               :fields {:key :string :value :double}}}))
+;;;
+;;; (def example3
+;;;   (list
+;;;     {:name "foo" :type :array
+;;;      :fields {:type :int}}
+;;;     {:name "bar" :type :array
+;;;      :fields {:type :map
+;;;               :fields {:key :string :value :struct
+;;;                        :fields [{:name "k1" :type :int}
+;;;                                 {:name "k2" :type :boolean}]}}}))
+
 
 (def deser
   (hash-map
-    :boolean parse-boolean
-    :string  parse-string
-    :float   parse-float
-    :double  parse-double
-    :int     parse-int
-    :bigint  parse-bigint
-    :struct  parse-struct
-    :map     parse-map
-    :list    parse-list))
+    :array     parse-list
+    :binary    parse-bytes
+    :bigint    parse-long
+    :boolean   parse-long
+    :char      parse-bytes
+    :date      parse-long->date
+    :decimal   nil
+    :double    parse-double
+    :float     parse-double
+    :int       parse-long
+    :map       parse-map
+    :smallint  parse-long
+    :string    parse-bytes
+    :struct    parse-struct
+    :timestamp nil
+    :tinyint   parse-long
+    :uniontype nil
+    :varchar   parse-bytes))
+
+
+;; ===========
+;; -  Utils  -
+;; ===========
 
 (defn accum [acc name func]
   (conj acc {:name name :fn func}))
@@ -110,8 +166,8 @@
    Returns list of column name / deserializer handlers keyed by
    :name and :fn respectively.
    e.g.
-     {:name 'foo'  :fn parse-string}
-     {:name 'bar'  :fn parse-int}"
+     {:name 'foo'  :fn parse-bytes}
+     {:name 'bar'  :fn parse-long}"
   [col-types]
   (loop [types col-types
          acc []]

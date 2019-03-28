@@ -1,6 +1,6 @@
 # clj-orc
 
-clj-orc is a library for translating ORC files into json represenation.
+clj-orc is a library for reading ORC files. Low level streamers facilitate writing into arbitrary formats; alternatively, the json streamer can be used to write json files.
 
 ## Installation
 
@@ -188,8 +188,64 @@ The last four parameters of the json streamer are optional keyword arguments.
 ```:meta``` is a 2-arity function that takes ```TypeDescrition``` and ```VectorizedRowBatch``` objects as arguments.
 The return value is the first value in the output stream. If no function is provided a default function will provide a default value.
 
-## TODO
- * Complex type deserializers (with appropriate unit tests)
+### Nested Type Definitions
+
+The following examples illustrate deeply nested structure configurations.
+
+```clojure
+(def example
+  (list
+    {:name "foo" :type :map
+     :fields {:key :string :value :double}}
+    {:name "bar" :type :map
+     :fields {:key :string :value :struct
+              :fields [{:name "k1" :type :int}
+                       {:name "k2" :type :float}]}}
+    {:name "baz" :type :array
+     :fields {:type :int}}))
+
+(def example2
+  (list
+    {:name "foo" :type :array
+     :fields {:type :int}}
+    {:name "bar" :type :array
+     :fields {:type :map
+              :fields {:key :string :value :double}}}))
+
+(def example3
+  (list
+    {:name "foo" :type :array
+     :fields {:type :int}}
+    {:name "bar" :type :array
+     :fields {:type :map
+              :fields {:key :string :value :struct
+                       :fields [{:name "k1" :type :int}
+                                {:name "k2" :type :boolean}]}}}))
+```
+
+## Type Coverage
+
+ORC Type |Implemented
+---------|-----------
+array    | x
+binary   | x
+bigint   | x
+boolean  | x
+char     | x
+date     | x
+decimal  |
+double   | x
+float    | x
+int      | x
+map      | x
+smallint | x
+string   | x
+struct   | x
+timestamp|
+tinyint  | x
+union    |
+varchar  | x
+
 
 ## License
 

@@ -21,8 +21,8 @@
           ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
           ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
           fields (list
-            {:name "f1" :type "int"}
-            {:name "f2" :type "int"})
+            {:name "f1" :type :int}
+            {:name "f2" :type :int})
           _ (orc-fixture/write wtr bat 10
 	      [(.vector (aget (.cols bat) 0)) identity]
 	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
@@ -44,8 +44,8 @@
           ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
           ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
           fields (list
-            {:name "f1" :type "int"}
-            {:name "f2" :type "int"})
+            {:name "f1" :type :int}
+            {:name "f2" :type :int})
           _ (orc-fixture/write wtr bat 2
 	      [(.vector (aget (.cols bat) 0)) identity]
 	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
@@ -65,8 +65,8 @@
           ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
           meta #(format "%d Columns" (.numCols %2))
           fields (list
-            {:name "f1" :type "int"}
-            {:name "f2" :type "int"})
+            {:name "f1" :type :int}
+            {:name "f2" :type :int})
           _ (orc-fixture/write wtr bat 2
 	      [(.vector (aget (.cols bat) 0)) identity]
 	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
@@ -85,8 +85,8 @@
           ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
           ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
           fields (list
-            {:name "f1" :type "int"}
-            {:name "f2" :type "int"})
+            {:name "f1" :type :int}
+            {:name "f2" :type :int})
           _ (orc-fixture/write wtr bat 0)
           ch (orc-json/start (orc-read/configure)
                              (URI. src)
@@ -106,8 +106,8 @@
           ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
           ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
           fields (list
-            {:name "f1" :type "int"}
-            {:name "f2" :type "int"})
+            {:name "f1" :type :int}
+            {:name "f2" :type :int})
           _ (orc-fixture/write wtr bat 10
 	      [(.vector (aget (.cols bat) 0)) identity]
 	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
@@ -128,8 +128,8 @@
           ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
           ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
           fields (list
-            {:name "f1" :type "int"}
-            {:name "f2" :type "int"})
+            {:name "f1" :type :int}
+            {:name "f2" :type :int})
           _ (orc-fixture/write wtr bat 2
 	      [(.vector (aget (.cols bat) 0)) identity]
 	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
@@ -149,8 +149,8 @@
           ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
           meta #(format "%d Columns" (.numCols %2))
           fields (list
-            {:name "f1" :type "int"}
-            {:name "f2" :type "int"})
+            {:name "f1" :type :int}
+            {:name "f2" :type :int})
           _ (orc-fixture/write wtr bat 2
 	      [(.vector (aget (.cols bat) 0)) identity]
 	      [(.vector (aget (.cols bat) 1)) #(* % 2)])
@@ -169,8 +169,8 @@
           ^Writer wtr (orc-fixture/writer (orc-fixture/configuration) (Path. src) sch)
           ^VectorizedRowBatch bat (orc-fixture/batch sch 5)
           fields (list
-            {:name "f1" :type "int"}
-            {:name "f2" :type "int"})
+            {:name "f1" :type :int}
+            {:name "f2" :type :int})
           _ (orc-fixture/write wtr bat 0)
           ch (orc-json/start (orc-read/configure)
                              (URI. src)
