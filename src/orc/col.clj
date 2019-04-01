@@ -5,13 +5,33 @@
                                                  DoubleColumnVector
                                                  StructColumnVector
                                                  MapColumnVector
-                                                 ListColumnVector])
+                                                 ListColumnVector]
+          [org.joda.time DateTime DateTimeZone]
+          [org.joda.time.format DateTimeFormat])
   (:gen-class))
 
 
 (declare deser)
 
-;;; Deserializer function interface:
+
+;; ==========
+;; -  Util  -
+;; ==========
+
+(def msec->sec 1000)
+(def sec->min    60)
+(def min->hour   60)
+(def hour->day   24)
+(def msec->day (* msec->sec sec->min min->hour hour->day))
+
+(defn date->formatted-str
+  [date & {:keys [fmt]
+           :or {fmt "yyyy-MM-dd"}}]
+  (let [dtf (DateTimeFormat/forPattern fmt)]
+    (.print dtf date)))
+
+
+;;; *** Deserializer Function Interface ***
 ;;;
 ;;;   (fn <map>arg1, <ColumnVector>arg2, <int>arg3)
 ;;;
@@ -34,12 +54,12 @@
   [fields ^LongColumnVector col row-n]
   (nth (.vector col) row-n))
 
-;; TODO: print date value
 (defn parse-long->date
   [fields ^LongColumnVector col row-n]
-  (let [builder (java.lang.StringBuilder.)]
-    (.stringifyValue col builder row-n)
-    (.toString builder)))
+  (let [^long val (nth (.vector col) row-n)]
+    (-> (DateTime. (* val msec->day))
+        (.withZone DateTimeZone/UTC)
+        (date->formatted-str))))
 
 (defn parse-double
   [fields ^DoubleColumnVector col row-n]
