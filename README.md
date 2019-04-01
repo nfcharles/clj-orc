@@ -241,7 +241,7 @@ map      | x
 smallint | x
 string   | x
 struct   | x
-timestamp|
+timestamp| x
 tinyint  | x
 union    |
 varchar  | x

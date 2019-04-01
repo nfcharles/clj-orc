@@ -3,6 +3,7 @@
                                                  BytesColumnVector
                                                  LongColumnVector
                                                  DoubleColumnVector
+                                                 TimestampColumnVector
                                                  StructColumnVector
                                                  MapColumnVector
                                                  ListColumnVector]
@@ -57,9 +58,14 @@
 (defn parse-long->date
   [fields ^LongColumnVector col row-n]
   (let [^long val (nth (.vector col) row-n)]
-    (-> (DateTime. (* val msec->day))
-        (.withZone DateTimeZone/UTC)
+    (-> (DateTime. (* val msec->day) DateTimeZone/UTC)
         (date->formatted-str))))
+
+(defn parse-timestamp
+  [fields ^TimestampColumnVector col row-n]
+  (-> (.getTimestampAsLong col row-n)
+      (DateTime. DateTimeZone/UTC)
+      (date->formatted-str :fmt "yyyy-MM-dd HH:mm:ss")))
 
 (defn parse-double
   [fields ^DoubleColumnVector col row-n]
@@ -162,7 +168,7 @@
     :smallint  parse-long
     :string    parse-bytes
     :struct    parse-struct
-    :timestamp nil
+    :timestamp parse-timestamp
     :tinyint   parse-long
     :uniontype nil
     :varchar   parse-bytes))
