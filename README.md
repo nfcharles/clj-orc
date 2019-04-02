@@ -88,13 +88,13 @@ ORC.  The following example demonstrates configuring the reader for remote readi
   (:require [orc.read])
   (:gen-class))
 
-(def s3-resource-mapping
+(def s3-configuration
   (hash-map
     "fs.file.impl"      {:value "org.apache.hadoop.fs.s3a.S3AFileSystem"}
     "fs.s3a.access.key" {:value akey :type :private}
     "fs.s3a.secret.key" {:value skey :type :private}))
 
-(orc-read/configure s3-resource-mapping)
+(orc-read/configure s3-configuration)
 
 ;; set path to remote URI
 (def path (java.net.URI. "s3a://bucket/path/to/key"))
@@ -190,7 +190,7 @@ The return value is the first value in the output stream. If no function is prov
 
 ### Nested Type Definitions
 
-The following examples illustrate deeply nested structure configurations.
+The following examples illustrate deeply nested type configurations.
 
 ```clojure
 (def example

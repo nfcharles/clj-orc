@@ -8,7 +8,7 @@
                                                  MapColumnVector
                                                  ListColumnVector]
           [org.joda.time DateTime DateTimeZone]
-          [org.joda.time.format DateTimeFormat])
+          [org.joda.time.format DateTimeFormat DateTimeFormatter])
   (:gen-class))
 
 
@@ -26,9 +26,9 @@
 (def msec->day (* msec->sec sec->min min->hour hour->day))
 
 (defn date->formatted-str
-  [date & {:keys [fmt]
+  [^DateTime date & {:keys [fmt]
            :or {fmt "yyyy-MM-dd"}}]
-  (let [dtf (DateTimeFormat/forPattern fmt)]
+  (let [^DateTimeFormatter dtf (DateTimeFormat/forPattern fmt)]
     (.print dtf date)))
 
 
