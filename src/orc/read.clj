@@ -15,13 +15,14 @@
 
 (def buffer-size 100)
 
-(defn stream-metadata [^org.apache.orc.TypeDescription des
-                       ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
-  "Read Stream")
-
 (def configuration-mapping
   (hash-map
     "fs.file.impl" {:value "org.apache.hadoop.fs.LocalFileSystem"}))
+
+(defn stream-metadata
+  [^org.apache.orc.TypeDescription des
+   ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
+  "Read Stream")
 
 (defn configure
   "Returns hash-map of hadoop configuration.  Input configuration has following
@@ -47,10 +48,12 @@
    ([]
      (configure configuration-mapping)))
 
-(defn reader ^org.apache.orc.Reader [path conf]
+(defn reader
+  ^org.apache.orc.Reader [path conf]
   (OrcFile/createReader path (OrcFile/readerOptions conf)))
 
-(defn schema ^org.apache.orc.TypeDescription [^org.apache.orc.Reader rdr]
+(defn schema
+  ^org.apache.orc.TypeDescription [^org.apache.orc.Reader rdr]
   (.getSchema rdr))
 
 (defn batch ^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch
@@ -59,11 +62,13 @@
   ([^org.apache.orc.TypeDescription sch]
     (batch sch batch-size)))
 
-(defn start [conf ^java.net.URI src-path col-headers col-handlers & {:keys [bat-size buf-size coll-type meta]
-                                                                     :or {bat-size batch-size
-                                                                          buf-size buffer-size
-                                                                          coll-type :vector
-                                                                          meta stream-metadata}}]
+(defn start
+  "Starts reader thread"
+  [conf ^java.net.URI src-path col-headers col-handlers & {:keys [bat-size buf-size coll-type meta]
+                                                           :or {bat-size batch-size
+                                                                buf-size buffer-size
+                                                                coll-type :vector
+                                                                meta stream-metadata}}]
     (debugf "BATCH_SIZE=%d" bat-size)
     (debugf "BUFFER_SIZE=%d" buf-size)
     (debugf "COLLECTION_TYPE=%s" coll-type)

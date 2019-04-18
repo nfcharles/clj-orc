@@ -2,79 +2,203 @@
   (import [org.apache.hadoop.hive.ql.exec.vector ColumnVector
                                                  BytesColumnVector
                                                  LongColumnVector
-                                                 DoubleColumnVector])
+                                                 DoubleColumnVector
+                                                 TimestampColumnVector
+                                                 StructColumnVector
+                                                 MapColumnVector
+                                                 ListColumnVector]
+          [org.joda.time DateTime DateTimeZone]
+          [org.joda.time.format DateTimeFormat DateTimeFormatter])
   (:gen-class))
 
 
-;;; Deserializer function interface:
+(declare deser)
+
+
+;; ==========
+;; -  Util  -
+;; ==========
+
+(def msec->sec 1000)
+(def sec->min    60)
+(def min->hour   60)
+(def hour->day   24)
+(def msec->day (* msec->sec sec->min min->hour hour->day))
+
+(defn date->formatted-str
+  [^DateTime date & {:keys [fmt]
+           :or {fmt "yyyy-MM-dd"}}]
+  (let [^DateTimeFormatter dtf (DateTimeFormat/forPattern fmt)]
+    (.print dtf date)))
+
+
+;;; *** Deserializer Function Interface ***
 ;;;
-;;;   (fn <ColumnVector>arg1, <int>arg2)
+;;;   (fn <map>arg1, <ColumnVector>arg2, <int>arg3)
 ;;;
 ;;; where,
-;;;   arg1: ColumnVector classes
-;;;   arg2: row number
+;;;   arg1: map spec for complex types
+;;;   arg2: ColumnVector class
+;;;   arg3: row number
 
-(defn bool [^LongColumnVector col row-n]
-  (nth (.vector col) row-n))
 
-(defn string [^BytesColumnVector col row-n]
+;; ==================
+;; -  Scalar Types  -
+;; ==================
+
+(defn parse-bytes
   "Returns deserialized row value."
+  [fields ^BytesColumnVector col row-n]
   (.toString col row-n))
 
-(defn flt [^DoubleColumnVector col row-n]
-  (let [val (nth (.vector col) row-n)]
-    (if (Float/isNaN val)
-      nil
-      val)))
+(defn parse-long
+  [fields ^LongColumnVector col row-n]
+  (nth (.vector col) row-n))
 
-(defn dble [^DoubleColumnVector col row-n]
+(defn parse-long->date
+  [fields ^LongColumnVector col row-n]
+  (let [^long val (nth (.vector col) row-n)]
+    (-> (DateTime. (* val msec->day) DateTimeZone/UTC)
+        (date->formatted-str))))
+
+(defn parse-timestamp
+  [fields ^TimestampColumnVector col row-n]
+  (-> (.getTimestampAsLong col row-n)
+      (DateTime. DateTimeZone/UTC)
+      (date->formatted-str :fmt "yyyy-MM-dd HH:mm:ss")))
+
+(defn parse-double
+  [fields ^DoubleColumnVector col row-n]
   (let [val (nth (.vector col) row-n)]
     (if (Double/isNaN val)
       nil
       val)))
 
-(defn intg [^LongColumnVector col row-n]
-  (nth (.vector col) row-n))
 
-(defn long-intg [^LongColumnVector col row-n]
-  (nth (.vector col) row-n))
-
-(defn default [col row-n]
-  "Returns deserialized row value"
-  (nth (.vector col) row-n))
+;; ====================
+;; -  Compound Types  -
+;; ====================
 
 
-;;; TODO: implement remaining types - complex types.
+(defn parse-struct
+  [fields ^StructColumnVector col row-n]
+  (loop [xs (map list fields (.fields col))
+         acc []]
+    (if-let [x (first xs)]
+      (let [[field _col] x
+            handler (deser (:type field))]
+        #_(println (format "name=%s, handler=%s" (:name field) handler))
+        (recur (rest xs) (conj acc (handler (:fields field) _col row-n))))
+      acc)))
 
-(def type-mapper
+(defn parse-map
+  [fields ^MapColumnVector col row-n]
+  (let [k-handler          ((:key fields) deser)
+        v-handler          ((:value fields) deser)
+        ^ColumnVector kcol (.keys col)
+        ^ColumnVector vcol (.values col)
+        ^int map-len       (nth (.lengths col) row-n)
+        ^int offset        (nth (.offsets col) row-n)
+        limit              (+ offset map-len)]
+    (loop [i   offset
+           acc {}]
+      (if (< i limit)
+        ;; key cannot be compound type, hence `fields` value is nil
+        (recur (inc i) (assoc acc (k-handler nil kcol i) (v-handler (:fields fields) vcol i)))
+        acc))))
+
+(defn parse-list
+  [fields ^ListColumnVector col row-n]
+  (let [v-handler          ((:type fields) deser)
+        ^ColumnVector vcol (.child col)
+        ^int list-len      (nth (.lengths col) row-n)
+        ^int offset        (nth (.offsets col) row-n)
+        limit              (+ offset list-len)]
+    (loop [i offset
+           acc []]
+      (if (< i limit)
+        (recur (inc i) (conj acc (v-handler (:fields fields) vcol i)))
+        acc))))
+
+;;; Nested compound types example definitions
+;;;
+;;; (def example
+;;;   (list
+;;;     {:name "foo" :type :map
+;;;      :fields {:key :string :value :double}}
+;;;     {:name "bar" :type :map
+;;;      :fields {:key :string :value :struct
+;;;               :fields [{:name "k1" :type :int}
+;;;                        {:name "k2" :type :float}]}}
+;;;     {:name "baz" :type :array
+;;;      :fields {:type :int}}))
+;;;
+;;; (def example2
+;;;   (list
+;;;     {:name "foo" :type :array
+;;;      :fields {:type :int}}
+;;;     {:name "bar" :type :array
+;;;      :fields {:type :map
+;;;               :fields {:key :string :value :double}}}))
+;;;
+;;; (def example3
+;;;   (list
+;;;     {:name "foo" :type :array
+;;;      :fields {:type :int}}
+;;;     {:name "bar" :type :array
+;;;      :fields {:type :map
+;;;               :fields {:key :string :value :struct
+;;;                        :fields [{:name "k1" :type :int}
+;;;                                 {:name "k2" :type :boolean}]}}}))
+
+
+(def deser
   (hash-map
-    "boolean" bool
-    "string"  string
-    "float"   flt
-    "double"  dble
-    "int"     intg
-    "bigint"  long-intg))
+    :array     parse-list
+    :binary    parse-bytes
+    :bigint    parse-long
+    :boolean   parse-long
+    :char      parse-bytes
+    :date      parse-long->date
+    :decimal   nil
+    :double    parse-double
+    :float     parse-double
+    :int       parse-long
+    :map       parse-map
+    :smallint  parse-long
+    :string    parse-bytes
+    :struct    parse-struct
+    :timestamp parse-timestamp
+    :tinyint   parse-long
+    :uniontype nil
+    :varchar   parse-bytes))
+
+
+;; ===========
+;; -  Utils  -
+;; ===========
 
 (defn accum [acc name func]
   (conj acc {:name name :fn func}))
 
-(defn handlers [col-types]
+(defn handlers
   "Returns a list of maps where each map contains a col deserializer.
 
    Input is list of maps defining column names and types.
    e.g.
-     {:name 'foo' :type 'string' }
-     {:name 'bar' :type 'int'    }
+     {:name 'foo' :type :string}
+     {:name 'bar' :type :int   }
 
    Returns list of column name / deserializer handlers keyed by
    :name and :fn respectively.
    e.g.
-     {:name 'foo'  :fn string  }
-     {:name 'bar'  :fn default }"
+     {:name 'foo'  :fn parse-bytes}
+     {:name 'bar'  :fn parse-long}"
+  [col-types]
   (loop [types col-types
          acc []]
     (if-let [col-type (first types)]
-      (if-let [handler (type-mapper (:type col-type))]
-        (recur (rest types) (accum acc (:name col-type) handler))
-        (recur (rest types) (accum acc (:name col-type) default)))
+      (if-let [handler (deser (:type col-type))]
+        (recur (rest types) (accum acc (:name col-type) (partial handler (:fields col-type))))
+        (throw (java.lang.Exception. (format "Unsupported column type: %s" col-type))))
       acc)))

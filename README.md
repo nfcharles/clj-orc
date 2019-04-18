@@ -1,6 +1,6 @@
 # clj-orc
 
-clj-orc is a library for translating ORC files into json represenation.
+clj-orc is a library for reading ORC files. Low level streamers facilitate writing into arbitrary formats; alternatively, the json streamer can be used to write json files.
 
 ## Installation
 
@@ -18,16 +18,28 @@ responsible for data deserialization.  See example below:
 ### Column handlers
 ```clojure
 (ns examples.fields
-  (:require [orc.col :as col])
+  (:require [orc.col])
   (:gen-class))
 
 (def foo
   (list
-    {:name "x" :type "int" }
-    {:name "y" :type "int" }))
+    {:name "x" :type :int}
+    {:name "y" :type :int}))
+
+(def bar
+  (list
+    {:name "x" :type :int}
+    {:name "y" :type :int}
+    {:name "a" :type :map
+      :fields {:key :string :value :double}}
+    {:name "b" :type :struct
+      :fields
+       [{:name "foo" :type :string}
+        {:name "bar" :type :string}
+        {:name "baz" :type :string}]}))
 
 (defn col-handlers [^org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch bat]
-  (orc-col/handlers foo))
+  (orc.col/handlers foo))
 
 ;; Header records are used for memory optimization.  :map collection types use ordinal
 ;; values mapped to their corresponding field names.
@@ -73,16 +85,20 @@ ORC.  The following example demonstrates configuring the reader for remote readi
 
 ```clojure
 (ns examples.config
-  (:require [orc.read :as orc-read])
+  (:require [orc.read])
   (:gen-class))
 
-(def s3-resource-mapping
+(def s3-configuration
   (hash-map
-    "fs.file.impl" {:value "org.apache.hadoop.fs.s3native.NativeS3FileSystem"}
-    "fs.s3n.awsAccessKeyId" {:value access-key-id :type :private}
-    "fs.s3n.awsSecretAccessKey" {:value secret-key :type :private}))
+    "fs.file.impl"      {:value "org.apache.hadoop.fs.s3a.S3AFileSystem"}
+    "fs.s3a.access.key" {:value akey :type :private}
+    "fs.s3a.secret.key" {:value skey :type :private}))
 
-(orc-read/configure s3-resource-mapping)
+(orc-read/configure s3-configuration)
+
+;; set path to remote URI
+(def path (java.net.URI. "s3a://bucket/path/to/key"))
+
 ```
 ```:private``` configuration values are obfuscated during logging.
 
@@ -91,13 +107,13 @@ ORC.  The following example demonstrates configuring the reader for remote readi
 #### Use orc core methods to convert ```VectorizedRowBatch``` to list of maps
 ```clojure
 (ns examples.driver
-  (:require [orc.core :as orc-core]
+  (:require [orc.core]
             [example.fields :as fields])
   (:gen-class))
 
 (loop [acc []]
   (if (.nextBatch reader batch)
-    (recur conj acc (orc-core/rows->maps (fields/column-handlers batch) batch))
+    (recur conj acc (orc.core/rows->maps (fields/column-handlers batch) batch))
     acc))
 ```
 
@@ -105,27 +121,29 @@ ORC.  The following example demonstrates configuring the reader for remote readi
 #### Use orc read worker to concurrently read and process ORC data (into clojure maps)
 ```clojure
 (ns examples.driver
-  (:require [orc.read :as orc-read]
+  (:require [orc.read]
             [example.fields :as flds])
   (:gen-class))
 
 ;; start method coll-type parameter defaults to :vector
-(let [ch (orc-read/start conf uri (partial flds/col-headers :map) flds/col-handlers
+(let [ch (orc.read/start conf uri (partial flds/col-headers :map) flds/col-handlers
                          :bat-size batch-size
                          :buf-size buffer-size
                          :coll-type :map)]
   ;; First value from stream is stream metadata
-  (println (async/<!! ch))			 
+  (println (async/<!! ch))
+
+  ;; Header record
+  (println (async/<!! ch))
+
   (loop [acc []]
     (if-let [res (async/<!! ch)]
-      (do
-        ;; where result is list of hash-maps
-        ;; [{'col_1' 'foo'
-        ;;   'col_2' 'bar'
-        ;;   'col_n' 'baz'},
-        ;;  ...]
-        (conj acc (process res))
-        (recur))
+      ;; where result is list of hash-maps
+      ;; [{'col_1' 'foo'
+      ;;   'col_2' 'bar'
+      ;;   'col_n' 'baz'},
+      ;;  ...]
+      (recur (conj acc (process res)))
       acc)))
 ```
 The last four parameters of the read streamer are optional keyword arguments.
@@ -142,15 +160,18 @@ The return value is the first value in the output stream. If no function is prov
 #### Use orc json streamer to concurrently stream and process json chunks (records are json lists)
 ```clojure
 (ns example.driver
-  (:require [orc.json :as orc-json]
+  (:require [orc.json]
             [example.fields :as flds])
   (:gen-class))
 
 ;; start method coll-type defaults to :vector
-(let [ch (orc-json/start conf uri (partial flds/col-headers :vector) flds/col-handlers byte-limit
-                         :bat-size batch-size)]
+(let [ch (orc.json/start conf uri (partial flds/col-headers :vector) flds/col-handlers byte-limit :bat-size batch-size)]
   ;; First value from stream is stream metadata
   (println (async/<!! ch))
+
+  ;; Header record
+  (println (async/<!! ch))
+
   (loop []
     (if-let [chunk (async/<!! ch)]
       (let [ret (process chunk)]
@@ -167,8 +188,64 @@ The last four parameters of the json streamer are optional keyword arguments.
 ```:meta``` is a 2-arity function that takes ```TypeDescrition``` and ```VectorizedRowBatch``` objects as arguments.
 The return value is the first value in the output stream. If no function is provided a default function will provide a default value.
 
-## TODO
- * Complex type deserializers (with appropriate unit tests)
+### Nested Type Definitions
+
+The following examples illustrate deeply nested type configurations.
+
+```clojure
+(def example
+  (list
+    {:name "foo" :type :map
+     :fields {:key :string :value :double}}
+    {:name "bar" :type :map
+     :fields {:key :string :value :struct
+              :fields [{:name "k1" :type :int}
+                       {:name "k2" :type :float}]}}
+    {:name "baz" :type :array
+     :fields {:type :int}}))
+
+(def example2
+  (list
+    {:name "foo" :type :array
+     :fields {:type :int}}
+    {:name "bar" :type :array
+     :fields {:type :map
+              :fields {:key :string :value :double}}}))
+
+(def example3
+  (list
+    {:name "foo" :type :array
+     :fields {:type :int}}
+    {:name "bar" :type :array
+     :fields {:type :map
+              :fields {:key :string :value :struct
+                       :fields [{:name "k1" :type :int}
+                                {:name "k2" :type :boolean}]}}}))
+```
+
+## Type Coverage
+
+ORC Type |Implemented
+---------|-----------
+array    | x
+binary   | x
+bigint   | x
+boolean  | x
+char     | x
+date     | x
+decimal  |
+double   | x
+float    | x
+int      | x
+map      | x
+smallint | x
+string   | x
+struct   | x
+timestamp| x
+tinyint  | x
+union    |
+varchar  | x
+
 
 ## License
 
