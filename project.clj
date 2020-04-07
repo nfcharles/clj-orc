@@ -14,4 +14,6 @@
   :global-vars {*warn-on-reflection* true}
   :profiles {:uberjar {:aot :all}
              :dev  {:dependencies [[org.apache.hadoop/hadoop-aws "2.8.3"]
-                                   [org.apache.hadoop/hadoop-common "2.8.3"]]}})
+                                   [org.apache.hadoop/hadoop-common "2.8.3"]]}}
+  :deploy-repositories [["releases" :clojars]
+                        ["snapshots" :clojars]])

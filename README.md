@@ -2,19 +2,17 @@
 
 [![Build Status](https://travis-ci.org/nfcharles/clj-orc.svg?branch=master)](https://travis-ci.org/nfcharles/clj-orc)
 [![codecov](https://codecov.io/gh/nfcharles/clj-orc/branch/master/graph/badge.svg)](https://codecov.io/gh/nfcharles/clj-orc)
-[![Clojars Project](https://img.shields.io/clojars/v/clj-orc.svg)](https://clojars.org/clj-orc)
+[![Clojars Project](https://img.shields.io/clojars/v/nfcharles/orc.svg)](https://clojars.org/nfcharles/orc)
 
 
 
 clj-orc is a library for reading ORC files. Low level streamers facilitate writing into arbitrary formats; alternatively, the json streamer can be used to write json files.
 
+
+
 ## Installation
 
-Fork repo and build project via lein.
-
-```bash
-lein uberjar
-```
+Library available from Clojars repository.
 
 ## Configuration
 
