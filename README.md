@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/nfcharles/clj-orc.svg?branch=master)](https://travis-ci.org/nfcharles/clj-orc)
 [![codecov](https://codecov.io/gh/nfcharles/clj-orc/branch/master/graph/badge.svg)](https://codecov.io/gh/nfcharles/clj-orc)
-[![Clojars Project](https://img.shields.io/clojars/v/nfcharles/orc.svg)](https://clojars.org/nfcharles/orc)
+[![Clojars Project](https://img.shields.io/clojars/v/org.clojars.nfcharles/orc.svg)](https://clojars.org/org.clojars.nfcharles/orc)
 
 
 
