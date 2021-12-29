@@ -1,4 +1,4 @@
-(defproject nfcharles/orc "0.8.1"
+(defproject org.clojars.nfcharles/orc "0.8.2"
   :description "ORC reader"
   :url "https://github.com/nfcharles/clj-orc.git"
   :license {:name "Eclipse Public License"
@@ -15,5 +15,4 @@
   :profiles {:uberjar {:aot :all}
              :dev  {:dependencies [[org.apache.hadoop/hadoop-aws "2.8.3"]
                                    [org.apache.hadoop/hadoop-common "2.8.3"]]}}
-  :deploy-repositories [["releases" :clojars]
-                        ["snapshots" :clojars]])
+  :deploy-repositories {"releases" {:url "https://repo.clojars.org" :creds :gpg}})
